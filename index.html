@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main id="game-shell" aria-label="Meadow IO game">
+  <main id="game-shell" aria-label="Meadow IO game" hidden>
     <canvas id="game-canvas" aria-label="Playable meadow map"></canvas>
     <aside id="minimap-panel" aria-label="Minimap">
       <canvas id="minimap-canvas"></canvas>
@@ -31,6 +31,16 @@
       <div id="secondary-hotbar-slots"></div>
     </section>
   </main>
+  <section id="home-screen" aria-label="Moborr.io home screen">
+    <div class="home-content">
+      <h1>Moborr.io</h1>
+      <form id="play-form">
+        <label class="sr-only" for="username-input">Username</label>
+        <input id="username-input" name="username" maxlength="16" autocomplete="nickname" placeholder="Enter username" required>
+        <button type="submit">Play</button>
+      </form>
+    </div>
+  </section>
   <script src="game.js"></script>
 </body>
 </html>

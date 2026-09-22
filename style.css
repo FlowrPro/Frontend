@@ -21,6 +21,96 @@ body {
   font-family: 'Nunito', sans-serif;
 }
 
+#home-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  overflow: hidden;
+  background-color: #76a943;
+  background-image: url('assets/grasstexture.webp');
+  background-size: 420px 420px;
+}
+
+#home-screen::after {
+  position: absolute;
+  inset: 0;
+  background: rgba(48, 78, 27, 0.16);
+  content: '';
+}
+
+.home-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 32px;
+  width: min(680px, calc(100vw - 32px));
+  padding-top: clamp(90px, 17vh, 170px);
+}
+
+.home-content h1 {
+  margin: 0;
+  color: #fff7d2;
+  font-size: clamp(58px, 11vw, 132px);
+  letter-spacing: 0.02em;
+  line-height: 0.9;
+  text-shadow: 0 7px 0 rgba(69, 91, 39, 0.65), 0 12px 20px rgba(27, 52, 15, 0.35);
+}
+
+#play-form {
+  display: flex;
+  align-items: stretch;
+  width: min(460px, 100%);
+  padding: 7px;
+  border: 2px solid rgba(255, 248, 214, 0.72);
+  border-radius: 12px;
+  background: rgba(36, 61, 20, 0.62);
+  box-shadow: 0 9px 22px rgba(31, 55, 17, 0.28);
+}
+
+#username-input,
+#play-form button {
+  border: 0;
+  font: inherit;
+}
+
+#username-input {
+  min-width: 0;
+  flex: 1;
+  padding: 13px 15px;
+  border-radius: 7px;
+  color: #40321c;
+  background: #fff8dc;
+  outline: none;
+}
+
+#play-form button {
+  margin-left: 7px;
+  padding: 0 25px;
+  border-radius: 7px;
+  color: #3a2b17;
+  background: #f2c94c;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+#play-form button:hover,
+#play-form button:focus-visible {
+  background: #ffe076;
+  outline: 3px solid rgba(255, 255, 255, 0.5);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 body {
   display: grid;
   place-items: center;
@@ -34,6 +124,13 @@ body {
   background: #6c4228;
   cursor: default;
 }
+
+#game-shell[hidden] {
+  display: none;
+}
+
+#home-screen[hidden] {
+  display: none;
 
 #game-canvas {
   display: block;

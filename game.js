@@ -8,6 +8,10 @@ const hotbarSlots = document.querySelector('#hotbar-slots');
 const secondaryHotbarSlots = document.querySelector('#secondary-hotbar-slots');
 const inventoryButton = document.querySelector('[data-action="inventory"]');
 const inventoryClose = document.querySelector('#inventory-close');
+const homeScreen = document.querySelector('#home-screen');
+const gameShell = document.querySelector('#game-shell');
+const playForm = document.querySelector('#play-form');
+const usernameInput = document.querySelector('#username-input');
 
 // World dimensions and spawn coordinates are intentionally easy to edit.
 const WORLD = {
@@ -21,6 +25,8 @@ const WORLD = {
 const player = {
   x: WORLD.spawnX,
   y: WORLD.spawnY,
+  renderX: WORLD.spawnX,
+  renderY: WORLD.spawnY,
   radius: 31,
   speed: 310,
 };
@@ -30,6 +36,8 @@ let socket = null;
 let localPlayerId = null;
 const remotePlayers = new Map();
 let networkSendTimer = 0;
+let selectedUsername = '';
+let hasStartedGame = false;
 
 const camera = { x: player.x, y: player.y };
 const keys = new Set();
@@ -194,17 +202,22 @@ function drawWorld() {
   context.strokeRect(mapLeft + 1, mapTop + 1, mapRight - mapLeft - 2, mapBottom - mapTop - 2);
 
   remotePlayers.forEach((remotePlayer) => {
-    drawPlayer(worldLeft + remotePlayer.x, worldTop + remotePlayer.y);
+    remotePlayer.renderX += (remotePlayer.x - remotePlayer.renderX) * (1 - Math.exp(-14 * frameDelta));
+    remotePlayer.renderY += (remotePlayer.y - remotePlayer.renderY) * (1 - Math.exp(-14 * frameDelta));
+    drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id);
+    drawPlayer(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.username);
   });
-  drawOrbitingPetals(worldLeft + player.x, worldTop + player.y);
-  drawPlayer(worldLeft + player.x, worldTop + player.y);
+  player.renderX += (player.x - player.renderX) * (1 - Math.exp(-18 * frameDelta));
+  player.renderY += (player.y - player.renderY) * (1 - Math.exp(-18 * frameDelta));
+  drawOrbitingPetals(worldLeft + player.renderX, worldTop + player.renderY, hotbar, localPlayerId);
+  drawPlayer(worldLeft + player.renderX, worldTop + player.renderY, selectedUsername);
 }
 
 function connectToServer() {
   socket = new WebSocket(SERVER_URL);
 
   socket.addEventListener('open', () => {
-    sendPlayerPosition(true);
+    socket.send(JSON.stringify({ type: 'start', username: selectedUsername }));
     console.info('Connected to Meadow IO server.');
   });
 
@@ -221,7 +234,11 @@ function connectToServer() {
       remotePlayers.clear();
       message.players
         .filter((remotePlayer) => remotePlayer.id !== localPlayerId)
-        .forEach((remotePlayer) => remotePlayers.set(remotePlayer.id, remotePlayer));
+        .forEach((remotePlayer) => {
+          remotePlayer.renderX = remotePlayer.x;
+          remotePlayer.renderY = remotePlayer.y;
+          remotePlayers.set(remotePlayer.id, remotePlayer);
+        });
     }
     if (message.type === 'state') {
       PETAL_RARITIES = message.petalRarities;
@@ -229,6 +246,8 @@ function connectToServer() {
       rarityById = new Map(PETAL_RARITIES.map((rarity) => [rarity.id, rarity]));
       player.x = message.player.x;
       player.y = message.player.y;
+      player.renderX = player.renderX || player.x;
+      player.renderY = player.renderY || player.y;
       player.health = message.player.health;
       player.damage = message.player.damage;
       player.reload = message.player.reload;
@@ -238,10 +257,17 @@ function connectToServer() {
       renderPetalUi();
     }
     if (message.type === 'playerJoined' && message.player.id !== localPlayerId) {
+      message.player.renderX = message.player.x;
+      message.player.renderY = message.player.y;
       remotePlayers.set(message.player.id, message.player);
     }
     if (message.type === 'playerUpdated' && message.player.id !== localPlayerId) {
-      remotePlayers.set(message.player.id, message.player);
+      const existing = remotePlayers.get(message.player.id) || message.player;
+      existing.x = message.player.x;
+      existing.y = message.player.y;
+      existing.username = message.player.username;
+      existing.hotbar = message.player.hotbar;
+      remotePlayers.set(message.player.id, existing);
     }
     if (message.type === 'playerUpdated' && message.player.id === localPlayerId) {
       player.x = message.player.x;
@@ -258,7 +284,7 @@ function connectToServer() {
   socket.addEventListener('close', () => {
     localPlayerId = null;
     remotePlayers.clear();
-    window.setTimeout(connectToServer, 3000);
+    if (hasStartedGame) window.setTimeout(connectToServer, 3000);
   }, { once: true });
 }
 
@@ -279,8 +305,8 @@ function sendServerAction(action, data = {}) {
   return true;
 }
 
-function drawOrbitingPetals(screenX, screenY) {
-  const equippedPetals = hotbar.filter(Boolean);
+function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'local') {
+  const equippedPetals = equippedBar.filter(Boolean);
   const defaultRadius = 86;
   const expandedRadius = 145;
   const retractedRadius = 46;
@@ -288,7 +314,8 @@ function drawOrbitingPetals(screenX, screenY) {
   orbitRadius += (targetRadius - orbitRadius) * (1 - Math.exp(-10 * frameDelta));
   if (!equippedPetals.length) return;
 
-  const rotation = (performance.now() % PETAL_ROTATION_MS) / PETAL_ROTATION_MS * Math.PI * 2;
+  const phase = orbitId ? orbitId.length * 0.17 : 0;
+  const rotation = ((performance.now() % PETAL_ROTATION_MS) / PETAL_ROTATION_MS * Math.PI * 2) + phase;
   equippedPetals.forEach((petal, index) => {
     const angle = rotation + index / equippedPetals.length * Math.PI * 2;
     drawPetal(
@@ -318,7 +345,7 @@ function drawPetal(screenX, screenY, rarity, rotation, size) {
   context.restore();
 }
 
-function drawPlayer(screenX, screenY) {
+function drawPlayer(screenX, screenY, username = '') {
   const pulse = Math.sin(performance.now() / 240) * 0.8;
   const radius = player.radius + pulse;
 
@@ -354,6 +381,14 @@ function drawPlayer(screenX, screenY) {
   context.beginPath();
   context.arc(0, 2, 12, 0.25, Math.PI - 0.25);
   context.stroke();
+  if (username) {
+    context.shadowColor = 'transparent';
+    context.fillStyle = '#fff8dc';
+    context.font = '800 14px Nunito, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'top';
+    context.fillText(username, 0, radius + 10);
+  }
   context.restore();
 }
 
@@ -549,34 +584,10 @@ function swapHotbarSlot(slotIndex) {
 
 function movePlayer(deltaTime) {
   networkSendTimer += deltaTime;
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    sendPlayerPosition();
-    camera.x = player.x;
-    camera.y = player.y;
-    return;
-  }
-  let horizontal = 0;
-  let vertical = 0;
-  if (keys.has('ArrowLeft') || keys.has('a')) horizontal -= 1;
-  if (keys.has('ArrowRight') || keys.has('d')) horizontal += 1;
-  if (keys.has('ArrowUp') || keys.has('w')) vertical -= 1;
-  if (keys.has('ArrowDown') || keys.has('s')) vertical += 1;
-
-  if (horizontal || vertical) {
-    const length = Math.hypot(horizontal, vertical);
-    const movement = player.speed * deltaTime / length;
-    player.x += horizontal * movement;
-    player.y += vertical * movement;
-  }
-
-  const minPosition = WORLD.border + player.radius;
-  const maxPosition = WORLD.width - WORLD.border - player.radius;
-  player.x = Math.max(minPosition, Math.min(maxPosition, player.x));
-  player.y = Math.max(minPosition, Math.min(maxPosition, player.y));
-
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  sendPlayerPosition();
   camera.x = player.x;
   camera.y = player.y;
-  sendPlayerPosition();
 }
 
 function gameLoop(currentTime) {
@@ -627,8 +638,15 @@ window.addEventListener('blur', () => {
 
 inventoryButton.addEventListener('click', () => toggleInventory());
 inventoryClose.addEventListener('click', () => toggleInventory(false));
+playForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  selectedUsername = usernameInput.value.trim().replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 16) || 'Guest';
+  hasStartedGame = true;
+  homeScreen.hidden = true;
+  gameShell.hidden = false;
+  connectToServer();
+});
 renderPetalUi();
-connectToServer();
 
 resize();
 requestAnimationFrame(gameLoop);
