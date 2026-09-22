@@ -131,6 +131,7 @@ body {
 
 #home-screen[hidden] {
   display: none;
+}
 
 #game-canvas {
   display: block;

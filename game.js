@@ -132,34 +132,6 @@ function hash(value) {
   return result - Math.floor(result);
 }
 
-function drawGrain(contextToDraw, left, top, right, bottom, density, scale, seedOffset) {
-  const width = right - left;
-  const height = bottom - top;
-  const count = Math.floor(width * height * density / 10000);
-
-  contextToDraw.save();
-  for (let index = 0; index < count; index += 1) {
-    const randomX = hash(index * 2.17 + seedOffset);
-    const randomY = hash(index * 3.71 + seedOffset + 91);
-    const randomLength = hash(index * 5.13 + seedOffset + 37);
-    const x = left + randomX * width;
-    const y = top + randomY * height;
-    const length = (1.5 + randomLength * 4) * scale;
-    const alpha = 0.12 + hash(index * 7.41 + seedOffset + 12) * 0.16;
-    const isLight = index % 3 !== 0;
-
-    contextToDraw.strokeStyle = isLight
-      ? `rgba(255, 247, 183, ${alpha})`
-      : `rgba(65, 87, 37, ${alpha * 0.7})`;
-    contextToDraw.lineWidth = Math.max(0.6, scale * 0.8);
-    contextToDraw.beginPath();
-    contextToDraw.moveTo(x, y);
-    contextToDraw.lineTo(x + length, y - length * (0.25 + randomLength * 0.35));
-    contextToDraw.stroke();
-  }
-  contextToDraw.restore();
-}
-
 function drawWorld() {
   context.fillStyle = '#6a4127';
   context.fillRect(0, 0, viewportWidth, viewportHeight);
@@ -195,8 +167,6 @@ function drawWorld() {
     context.fillStyle = '#76a943';
     context.fillRect(mapLeft, mapTop, mapWidth, mapHeight);
   }
-  drawGrain(context, mapLeft, mapTop, mapRight, mapBottom, 8.5, 1.15, 180);
-
   context.strokeStyle = 'rgba(42, 68, 27, 0.58)';
   context.lineWidth = 4;
   context.strokeRect(mapLeft + 1, mapTop + 1, mapRight - mapLeft - 2, mapBottom - mapTop - 2);
