@@ -247,16 +247,18 @@ function drawMobs(worldLeft, worldTop) {
     context.restore();
     const healthWidth = Math.min(180, Math.max(70, size * 0.55));
     const screenX = worldLeft + mob.renderX;
-    const screenY = worldTop + mob.renderY - Math.min(size / 2, 180) - 16;
+    const labelY = worldTop + mob.renderY + size / 2 + 16;
     context.fillStyle = 'rgba(38, 20, 14, 0.78)';
-    context.fillRect(screenX - healthWidth / 2, screenY, healthWidth, 7);
+    context.fillRect(screenX - healthWidth / 2, labelY + 16, healthWidth, 7);
     context.fillStyle = '#ed5b75';
-    context.fillRect(screenX - healthWidth / 2, screenY, healthWidth * Math.max(0, mob.health / mob.maxHealth), 7);
+    context.fillRect(screenX - healthWidth / 2, labelY + 16, healthWidth * Math.max(0, mob.health / mob.maxHealth), 7);
     context.fillStyle = '#fff8dc';
     context.font = '800 12px Nunito, sans-serif';
     context.textAlign = 'center';
-    context.textBaseline = 'bottom';
-    context.fillText(`${mob.rarityId} ${mob.name || 'Rock'}`, screenX, screenY - 4);
+    context.textBaseline = 'top';
+    context.fillText(`${mob.rarityId} ${mob.name || 'Rock'}`, screenX, labelY);
+    context.font = '700 10px Nunito, sans-serif';
+    context.fillText(`${Math.ceil(mob.health)} / ${Math.ceil(mob.maxHealth)}`, screenX, labelY + 25);
   });
 }
 
