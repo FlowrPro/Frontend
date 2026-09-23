@@ -85,6 +85,8 @@ let frameDelta = 1 / 60;
 let expandHeld = false;
 let retractHeld = false;
 let wasDead = false;
+let inventoryAnimationIndex = null;
+let equippedAnimationTarget = null;
 
 function createPetal(petalId, rarityId) {
   return { petalId, rarityId };
@@ -240,6 +242,9 @@ function connectToServer() {
       hotbar.splice(0, hotbar.length, ...message.hotbar);
       secondaryHotbar.splice(0, secondaryHotbar.length, ...message.secondaryHotbar);
       renderPetalUi();
+    }
+    if (message.type === 'petalEquipped') {
+      equippedAnimationTarget = message;
     }
     if (message.type === 'playerJoined' && message.player.id !== localPlayerId) {
       message.player.renderX = message.player.x;
@@ -554,6 +559,13 @@ function createPetalSlot(kind, index, petal) {
     });
     slot.addEventListener('mouseenter', () => showPetalTooltip(slot, petal));
     slot.addEventListener('mouseleave', () => hidePetalTooltip(slot));
+    if (kind === 'inventory') {
+      slot.addEventListener('click', () => {
+        inventoryAnimationIndex = index;
+        slot.classList.add('is-equipping');
+        sendServerAction('equipNext', { inventoryIndex: index });
+      });
+    }
   }
   slot.innerHTML += `<span class="slot-number">${slot.dataset.slotNumber}</span>`;
 
@@ -643,6 +655,17 @@ function renderPetalUi() {
   secondaryHotbar.forEach((petal, index) => {
     secondaryHotbarSlots.append(createPetalSlot('secondary-hotbar', index, petal));
   });
+  if (inventoryAnimationIndex !== null) {
+    const inventorySlot = inventoryGrid.querySelector(`[data-kind="inventory"][data-index="${inventoryAnimationIndex}"]`);
+    inventorySlot?.classList.add('is-equipping');
+    inventoryAnimationIndex = null;
+  }
+  if (equippedAnimationTarget) {
+    const bar = equippedAnimationTarget.targetBar === 'hotbar' ? hotbarSlots : secondaryHotbarSlots;
+    const targetSlot = bar.querySelector(`[data-kind="${equippedAnimationTarget.targetBar}"][data-index="${equippedAnimationTarget.targetSlot}"]`);
+    targetSlot?.classList.add('is-equipped');
+    equippedAnimationTarget = null;
+  }
 }
 
 function toggleInventory(isOpen = inventoryPanel.hidden) {
