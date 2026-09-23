@@ -103,6 +103,8 @@ function getPetalStats(petal) {
   return {
     ...type,
     ...rarity,
+    petalName: type.label,
+    rarityLabel: rarity.label,
     damage: type.baseDamage * rarity.multiplier,
     health: type.baseHealth * rarity.multiplier,
     reload: type.baseReload,
@@ -564,7 +566,7 @@ function showPetalTooltip(slot, petal) {
   const tooltip = document.createElement('div');
   tooltip.className = 'petal-tooltip';
   tooltip.style.setProperty('--tooltip-color', stats.color);
-  tooltip.innerHTML = `<strong>${stats.label} ${stats.label === 'Basic' ? 'Petal' : ''}</strong>Damage: ${stats.damage}<br>Health: ${stats.health}<br>Reload: ${stats.reload}s`;
+  tooltip.innerHTML = `<strong>${stats.petalName} Petal</strong><br>${stats.rarityLabel}<br>Damage: ${stats.damage}<br>Health: ${stats.health}<br>Reload: ${stats.reload}s`;
   document.body.append(tooltip);
   const bounds = slot.getBoundingClientRect();
   tooltip.style.left = `${bounds.left + bounds.width / 2}px`;
@@ -641,12 +643,12 @@ function createPetalSlot(kind, index, petal) {
   slot.dataset.index = index;
   slot.dataset.slotNumber = index === 9 ? '0' : String(index + 1);
   slot.title = rarity
-    ? `${stats.label} petal | ${rarity.label} | Damage ${stats.damage} | Health ${stats.health} | Reload ${stats.reload}s${reloadRemaining > 0 ? ` | Ready in ${reloadRemaining.toFixed(1)}s` : ''}`
+    ? `${stats.petalName} petal | ${stats.rarityLabel} | Damage ${stats.damage} | Health ${stats.health} | Reload ${stats.reload}s${reloadRemaining > 0 ? ` | Ready in ${reloadRemaining.toFixed(1)}s` : ''}`
     : 'Empty petal slot';
 
   if (rarity) {
     slot.draggable = true;
-    slot.innerHTML = `<span class="petal-icon basic"></span><span class="petal-name">${stats.label}</span>`;
+    slot.innerHTML = `<span class="petal-icon basic"></span><span class="petal-name">${stats.petalName}</span>`;
     if (reloadRemaining > 0) {
       slot.innerHTML += `<span class="petal-reload-overlay" aria-hidden="true"></span><span class="petal-reload-time">${reloadRemaining.toFixed(1)}</span>`;
     }
