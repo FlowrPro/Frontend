@@ -572,14 +572,29 @@ body {
 #secondary-hotbar {
   left: 50%;
   bottom: clamp(10px, 1.5vw, 20px);
-  width: min(510px, calc(100vw - 80px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(620px, calc(100vw - 32px));
   transform: translateX(-50%);
 }
 
 #secondary-hotbar-slots {
+  flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   gap: clamp(3px, 0.65vw, 6px);
+}
+
+#secondary-hotbar-hint {
+  flex: 0 0 auto;
+  color: rgba(255, 248, 220, 0.78);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  text-shadow: 1px 1px 2px rgba(30, 15, 8, 0.9);
 }
 
 #secondary-hotbar .petal-slot {
@@ -659,7 +674,7 @@ body {
 
   #secondary-hotbar {
     bottom: 8px;
-    width: calc(100vw - 100px);
+    width: calc(100vw - 20px);
   }
 }
 

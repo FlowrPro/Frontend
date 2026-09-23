@@ -182,11 +182,24 @@ function drawWorld() {
   context.strokeRect(mapLeft + 1, mapTop + 1, mapRight - mapLeft - 2, mapBottom - mapTop - 2);
 
   remotePlayers.forEach((remotePlayer) => {
-    if (remotePlayer.health <= 0) return;
     remotePlayer.renderX += (remotePlayer.x - remotePlayer.renderX) * (1 - Math.exp(-14 * frameDelta));
     remotePlayer.renderY += (remotePlayer.y - remotePlayer.renderY) * (1 - Math.exp(-14 * frameDelta));
     drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id, remotePlayer);
     drawPlayer(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.username, remotePlayer);
+    if (remotePlayer.respawnFade) {
+      const fadeProgress = (performance.now() - remotePlayer.respawnFade.startedAt) / 460;
+      if (fadeProgress >= 1) {
+        remotePlayer.respawnFade = null;
+      } else {
+        drawPlayer(
+          worldLeft + remotePlayer.respawnFade.x,
+          worldTop + remotePlayer.respawnFade.y,
+          remotePlayer.username,
+          { radius: remotePlayer.radius || 31, health: 0 },
+          1 - fadeProgress,
+        );
+      }
+    }
   });
   player.renderX = player.x;
   player.renderY = player.y;
@@ -259,6 +272,9 @@ function connectToServer() {
     }
     if (message.type === 'playerUpdated' && message.player.id !== localPlayerId) {
       const existing = remotePlayers.get(message.player.id) || message.player;
+      const wasDead = existing.health <= 0;
+      const previousRenderX = existing.renderX ?? existing.x;
+      const previousRenderY = existing.renderY ?? existing.y;
       existing.x = message.player.x;
       existing.y = message.player.y;
       existing.username = message.player.username;
@@ -273,6 +289,13 @@ function connectToServer() {
       existing.expandHeld = message.player.expandHeld;
       existing.retractHeld = message.player.retractHeld;
       existing.orbitRadius = message.player.orbitRadius;
+      if (wasDead && existing.health > 0) {
+        existing.respawnFade = {
+          x: previousRenderX,
+          y: previousRenderY,
+          startedAt: performance.now(),
+        };
+      }
       remotePlayers.set(message.player.id, existing);
     }
     if (message.type === 'playerUpdated' && message.player.id === localPlayerId) {
@@ -397,11 +420,12 @@ function drawPetal(screenX, screenY, rarity, rotation, size) {
   context.restore();
 }
 
-function drawPlayer(screenX, screenY, username = '', playerState = player) {
+function drawPlayer(screenX, screenY, username = '', playerState = player, opacity = 1) {
   const pulse = Math.sin(performance.now() / 240) * 0.8;
   const radius = playerState.radius + pulse;
 
   context.save();
+  context.globalAlpha = opacity;
   context.translate(screenX, screenY);
   context.shadowColor = 'rgba(21, 42, 13, 0.35)';
   context.shadowBlur = 8;
@@ -461,20 +485,22 @@ function drawPlayer(screenX, screenY, username = '', playerState = player) {
     context.textAlign = 'center';
     context.textBaseline = 'top';
     context.fillText(username, 0, radius + 10);
-    const maxHealth = Math.max(1, playerState.maxHealth || 100);
-    const health = Math.max(0, Math.min(maxHealth, playerState.health ?? maxHealth));
-    const healthWidth = 76;
-    const healthTop = radius + 29;
-    context.fillStyle = 'rgba(38, 20, 14, 0.78)';
-    context.fillRect(-healthWidth / 2, healthTop, healthWidth, 6);
-    context.fillStyle = health > maxHealth * 0.35 ? '#55c878' : '#ed5b75';
-    context.fillRect(-healthWidth / 2, healthTop, healthWidth * (health / maxHealth), 6);
-    context.strokeStyle = 'rgba(255, 248, 220, 0.7)';
-    context.lineWidth = 1;
-    context.strokeRect(-healthWidth / 2, healthTop, healthWidth, 6);
-    context.fillStyle = '#fff8dc';
-    context.font = '700 10px Nunito, sans-serif';
-    context.fillText(`${Math.ceil(health)} / ${Math.ceil(maxHealth)}`, 0, healthTop + 8);
+    if (playerState.health > 0) {
+      const maxHealth = Math.max(1, playerState.maxHealth || 100);
+      const health = Math.max(0, Math.min(maxHealth, playerState.health ?? maxHealth));
+      const healthWidth = 76;
+      const healthTop = radius + 29;
+      context.fillStyle = 'rgba(38, 20, 14, 0.78)';
+      context.fillRect(-healthWidth / 2, healthTop, healthWidth, 6);
+      context.fillStyle = health > maxHealth * 0.35 ? '#55c878' : '#ed5b75';
+      context.fillRect(-healthWidth / 2, healthTop, healthWidth * (health / maxHealth), 6);
+      context.strokeStyle = 'rgba(255, 248, 220, 0.7)';
+      context.lineWidth = 1;
+      context.strokeRect(-healthWidth / 2, healthTop, healthWidth, 6);
+      context.fillStyle = '#fff8dc';
+      context.font = '700 10px Nunito, sans-serif';
+      context.fillText(`${Math.ceil(health)} / ${Math.ceil(maxHealth)}`, 0, healthTop + 8);
+    }
   }
   context.restore();
 }
@@ -863,6 +889,16 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && hasStartedGame) {
     event.preventDefault();
     toggleChat(true);
+    return;
+  }
+  if (event.key.toLowerCase() === 'x' && hasStartedGame) {
+    event.preventDefault();
+    toggleInventory();
+    return;
+  }
+  if (event.key.toLowerCase() === 'r' && hasStartedGame) {
+    event.preventDefault();
+    sendServerAction('swapAllBars');
     return;
   }
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
