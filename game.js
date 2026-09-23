@@ -136,27 +136,6 @@ borderTexture.addEventListener('load', () => {
   borderPattern = context.createPattern(borderTexture, 'repeat');
 });
 borderTexture.src = 'assets/bordertexture.svg';
-const mobImage = new Image();
-let mobSprite = null;
-mobImage.addEventListener('load', () => {
-  const spriteCanvas = document.createElement('canvas');
-  spriteCanvas.width = mobImage.naturalWidth;
-  spriteCanvas.height = mobImage.naturalHeight;
-  const spriteContext = spriteCanvas.getContext('2d');
-  spriteContext.drawImage(mobImage, 0, 0);
-  const pixels = spriteContext.getImageData(0, 0, spriteCanvas.width, spriteCanvas.height);
-  for (let index = 0; index < pixels.data.length; index += 4) {
-    const red = pixels.data[index];
-    const green = pixels.data[index + 1];
-    const blue = pixels.data[index + 2];
-    if (red > 220 && green > 220 && blue > 220 && Math.max(red, green, blue) - Math.min(red, green, blue) < 35) {
-      pixels.data[index + 3] = 0;
-    }
-  }
-  spriteContext.putImageData(pixels, 0, 0);
-  mobSprite = spriteCanvas;
-});
-mobImage.src = 'assets/Rock.png';
 
 function resize() {
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -240,7 +219,6 @@ function drawWorld() {
 
 function drawMobs(worldLeft, worldTop) {
   mobs.forEach((mob) => {
-    if (!mobSprite) return;
     const deathFade = mob.deathFade;
     if (mob.health <= 0 && !deathFade) return;
     mob.renderX += (mob.x - mob.renderX) * (1 - Math.exp(-12 * frameDelta));
@@ -253,7 +231,7 @@ function drawMobs(worldLeft, worldTop) {
     }
     context.save();
     context.globalAlpha = deathFade ? 0.98 * (1 - fadeProgress) : 0.98;
-    context.drawImage(mobSprite, worldLeft + mob.renderX - size / 2, worldTop + mob.renderY - size / 2, size, size);
+    drawRock(worldLeft + mob.renderX, worldTop + mob.renderY, size);
     context.restore();
     const healthWidth = Math.min(180, Math.max(70, size * 0.55));
     const screenX = worldLeft + mob.renderX;
@@ -270,6 +248,60 @@ function drawMobs(worldLeft, worldTop) {
     context.font = '700 10px Nunito, sans-serif';
     context.fillText(`${Math.ceil(mob.health)} / ${Math.ceil(mob.maxHealth)}`, screenX, labelY + 25);
   });
+}
+
+function drawRock(screenX, screenY, size) {
+  const halfSize = size / 2;
+  const points = [
+    [-0.46, 0.28], [-0.42, -0.12], [-0.26, -0.38], [0.08, -0.47],
+    [0.35, -0.3], [0.47, 0.02], [0.39, 0.31], [0.08, 0.46], [-0.23, 0.43],
+  ];
+  const path = new Path2D();
+  points.forEach(([x, y], index) => {
+    const pointX = screenX + x * halfSize * 2;
+    const pointY = screenY + y * halfSize * 2;
+    if (index === 0) path.moveTo(pointX, pointY);
+    else path.lineTo(pointX, pointY);
+  });
+  path.closePath();
+
+  context.save();
+  context.shadowColor = 'rgba(22, 18, 15, 0.42)';
+  context.shadowBlur = Math.max(5, size * 0.05);
+  context.shadowOffsetY = Math.max(3, size * 0.035);
+  const gradient = context.createLinearGradient(screenX, screenY - halfSize, screenX, screenY + halfSize);
+  gradient.addColorStop(0, '#aeb5bd');
+  gradient.addColorStop(0.48, '#7d858f');
+  gradient.addColorStop(1, '#555d67');
+  context.fillStyle = gradient;
+  context.fill(path);
+  context.shadowColor = 'transparent';
+  context.strokeStyle = '#343b44';
+  context.lineWidth = Math.max(2, size * 0.035);
+  context.lineJoin = 'round';
+  context.stroke(path);
+
+  context.globalAlpha *= 0.55;
+  context.fillStyle = '#d5dae0';
+  context.beginPath();
+  context.moveTo(screenX - halfSize * 0.28, screenY - halfSize * 0.6);
+  context.lineTo(screenX + halfSize * 0.08, screenY - halfSize * 0.7);
+  context.lineTo(screenX + halfSize * 0.26, screenY - halfSize * 0.34);
+  context.lineTo(screenX - halfSize * 0.04, screenY - halfSize * 0.2);
+  context.closePath();
+  context.fill();
+
+  context.globalAlpha *= 0.45;
+  context.fillStyle = '#39414b';
+  context.beginPath();
+  context.moveTo(screenX + halfSize * 0.06, screenY + halfSize * 0.08);
+  context.lineTo(screenX + halfSize * 0.42, screenY - halfSize * 0.03);
+  context.lineTo(screenX + halfSize * 0.31, screenY + halfSize * 0.42);
+  context.lineTo(screenX - halfSize * 0.03, screenY + halfSize * 0.54);
+  context.lineTo(screenX - halfSize * 0.11, screenY + halfSize * 0.2);
+  context.closePath();
+  context.fill();
+  context.restore();
 }
 
 function connectToServer() {
