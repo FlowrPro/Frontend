@@ -32,6 +32,8 @@ const player = {
   y: WORLD.spawnY,
   authoritativeX: WORLD.spawnX,
   authoritativeY: WORLD.spawnY,
+  authoritativeVelocityX: 0,
+  authoritativeVelocityY: 0,
   renderX: WORLD.spawnX,
   renderY: WORLD.spawnY,
   radius: 31,
@@ -244,6 +246,8 @@ function connectToServer() {
       player.y = message.player.y;
       player.authoritativeX = message.player.x;
       player.authoritativeY = message.player.y;
+      player.authoritativeVelocityX = message.player.velocityX || 0;
+      player.authoritativeVelocityY = message.player.velocityY || 0;
       player.renderX = player.renderX || player.x;
       player.renderY = player.renderY || player.y;
       player.health = message.player.health;
@@ -301,6 +305,8 @@ function connectToServer() {
     if (message.type === 'playerUpdated' && message.player.id === localPlayerId) {
       player.authoritativeX = message.player.x;
       player.authoritativeY = message.player.y;
+      player.authoritativeVelocityX = message.player.velocityX || 0;
+      player.authoritativeVelocityY = message.player.velocityY || 0;
       player.health = message.player.health;
       player.maxHealth = message.player.maxHealth;
       player.bodyDamage = message.player.bodyDamage;
@@ -851,8 +857,14 @@ function movePlayer(deltaTime) {
   player.y = Math.max(minPosition, Math.min(maxPosition, player.y));
 
   const correctionStrength = 1 - Math.exp(-10 * deltaTime);
-  player.x += (player.authoritativeX - player.x) * correctionStrength;
-  player.y += (player.authoritativeY - player.y) * correctionStrength;
+  const errorX = player.authoritativeX - player.x;
+  const errorY = player.authoritativeY - player.y;
+  const error = Math.hypot(errorX, errorY);
+  if (error > 70 || (!horizontal && !vertical)) {
+    const correctionScale = error > 70 ? correctionStrength : correctionStrength * 0.35;
+    player.x += errorX * correctionScale;
+    player.y += errorY * correctionScale;
+  }
   camera.x = player.x;
   camera.y = player.y;
 }
@@ -919,6 +931,7 @@ window.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
   keys.add(key);
+  sendPlayerPosition(true);
 });
 window.addEventListener('keyup', (event) => {
   if (event.target === chatInput) return;
@@ -932,6 +945,7 @@ window.addEventListener('keyup', (event) => {
     sendPetalControl();
   }
   keys.delete(key);
+  sendPlayerPosition(true);
 });
 
 canvas.addEventListener('mousedown', (event) => {
