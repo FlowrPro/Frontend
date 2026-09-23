@@ -37,6 +37,7 @@ const player = {
   speed: 310,
   velocityX: 0,
   velocityY: 0,
+  orbitRadius: 86,
 };
 
 const SERVER_URL = 'wss://backend-v4ok.onrender.com';
@@ -80,7 +81,6 @@ let viewportWidth = window.innerWidth;
 let viewportHeight = window.innerHeight;
 let lastTime = performance.now();
 let frameDelta = 1 / 60;
-let orbitRadius = 86;
 let expandHeld = false;
 let retractHeld = false;
 
@@ -178,12 +178,14 @@ function drawWorld() {
   remotePlayers.forEach((remotePlayer) => {
     remotePlayer.renderX += (remotePlayer.x - remotePlayer.renderX) * (1 - Math.exp(-14 * frameDelta));
     remotePlayer.renderY += (remotePlayer.y - remotePlayer.renderY) * (1 - Math.exp(-14 * frameDelta));
-    drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id);
+    drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id, remotePlayer);
     drawPlayer(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.username);
   });
   player.renderX = player.x;
   player.renderY = player.y;
-  drawOrbitingPetals(worldLeft + player.x, worldTop + player.y, hotbar, localPlayerId);
+  player.expandHeld = expandHeld;
+  player.retractHeld = retractHeld;
+  drawOrbitingPetals(worldLeft + player.x, worldTop + player.y, hotbar, localPlayerId, player);
   drawPlayer(worldLeft + player.x, worldTop + player.y, selectedUsername);
 }
 
@@ -299,13 +301,14 @@ function appendChatMessage(username, text) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'local') {
+function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'local', orbitState = {}) {
   const equippedPetals = equippedBar.filter(Boolean);
   const defaultRadius = 86;
   const expandedRadius = 145;
   const retractedRadius = 46;
-  const targetRadius = expandHeld ? expandedRadius : retractHeld ? retractedRadius : defaultRadius;
-  orbitRadius += (targetRadius - orbitRadius) * (1 - Math.exp(-10 * frameDelta));
+  const targetRadius = orbitState.expandHeld ? expandedRadius : orbitState.retractHeld ? retractedRadius : defaultRadius;
+  orbitState.orbitRadius = (orbitState.orbitRadius ?? defaultRadius)
+    + (targetRadius - (orbitState.orbitRadius ?? defaultRadius)) * (1 - Math.exp(-10 * frameDelta));
   if (!equippedPetals.length) return;
 
   const phase = orbitId ? orbitId.length * 0.17 : 0;
@@ -313,8 +316,8 @@ function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'l
   equippedPetals.forEach((petal, index) => {
     const angle = rotation + index / equippedPetals.length * Math.PI * 2;
     drawPetal(
-      screenX + Math.cos(angle) * orbitRadius,
-      screenY + Math.sin(angle) * orbitRadius,
+      screenX + Math.cos(angle) * orbitState.orbitRadius,
+      screenY + Math.sin(angle) * orbitState.orbitRadius,
       getPetalStats(petal),
       angle + Math.PI / 2,
       21,

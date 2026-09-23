@@ -180,7 +180,7 @@ body {
 }
 
 #chat-panel {
-  left: 88px;
+  right: clamp(14px, 3vw, 32px);
   bottom: clamp(14px, 3vw, 28px);
   display: flex;
   flex-direction: column;
@@ -496,9 +496,9 @@ body {
   }
 
   #chat-panel {
-    left: 68px;
+    right: 10px;
     bottom: 10px;
-    width: calc(100vw - 78px);
+    width: calc(100vw - 20px);
   }
 
   .action-button {
