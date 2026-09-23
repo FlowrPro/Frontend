@@ -25,6 +25,8 @@ const WORLD = {
 const player = {
   x: WORLD.spawnX,
   y: WORLD.spawnY,
+  authoritativeX: WORLD.spawnX,
+  authoritativeY: WORLD.spawnY,
   renderX: WORLD.spawnX,
   renderY: WORLD.spawnY,
   radius: 31,
@@ -66,7 +68,6 @@ const inventory = [];
 const hotbar = Array(HOTBAR_SIZE).fill(null);
 const secondaryHotbar = Array(HOTBAR_SIZE).fill(null);
 let draggedPetal = null;
-const grainSeed = 93817;
 let viewportWidth = window.innerWidth;
 let viewportHeight = window.innerHeight;
 let lastTime = performance.now();
@@ -127,11 +128,6 @@ function resize() {
   minimapCanvas.height = 400;
 }
 
-function hash(value) {
-  const result = Math.sin(value * 12.9898 + grainSeed) * 43758.5453;
-  return result - Math.floor(result);
-}
-
 function drawWorld() {
   context.fillStyle = '#6a4127';
   context.fillRect(0, 0, viewportWidth, viewportHeight);
@@ -177,10 +173,10 @@ function drawWorld() {
     drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id);
     drawPlayer(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.username);
   });
-  player.renderX += (player.x - player.renderX) * (1 - Math.exp(-18 * frameDelta));
-  player.renderY += (player.y - player.renderY) * (1 - Math.exp(-18 * frameDelta));
-  drawOrbitingPetals(worldLeft + player.renderX, worldTop + player.renderY, hotbar, localPlayerId);
-  drawPlayer(worldLeft + player.renderX, worldTop + player.renderY, selectedUsername);
+  player.renderX = player.x;
+  player.renderY = player.y;
+  drawOrbitingPetals(worldLeft + player.x, worldTop + player.y, hotbar, localPlayerId);
+  drawPlayer(worldLeft + player.x, worldTop + player.y, selectedUsername);
 }
 
 function connectToServer() {
@@ -216,6 +212,8 @@ function connectToServer() {
       rarityById = new Map(PETAL_RARITIES.map((rarity) => [rarity.id, rarity]));
       player.x = message.player.x;
       player.y = message.player.y;
+      player.authoritativeX = message.player.x;
+      player.authoritativeY = message.player.y;
       player.renderX = player.renderX || player.x;
       player.renderY = player.renderY || player.y;
       player.health = message.player.health;
@@ -240,8 +238,8 @@ function connectToServer() {
       remotePlayers.set(message.player.id, existing);
     }
     if (message.type === 'playerUpdated' && message.player.id === localPlayerId) {
-      player.x = message.player.x;
-      player.y = message.player.y;
+      player.authoritativeX = message.player.x;
+      player.authoritativeY = message.player.y;
       player.health = message.player.health;
       player.damage = message.player.damage;
       player.reload = message.player.reload;
@@ -556,6 +554,25 @@ function movePlayer(deltaTime) {
   networkSendTimer += deltaTime;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   sendPlayerPosition();
+
+  const horizontal = (keys.has('ArrowRight') || keys.has('d') ? 1 : 0)
+    - (keys.has('ArrowLeft') || keys.has('a') ? 1 : 0);
+  const vertical = (keys.has('ArrowDown') || keys.has('s') ? 1 : 0)
+    - (keys.has('ArrowUp') || keys.has('w') ? 1 : 0);
+  const inputLength = Math.hypot(horizontal, vertical) || 1;
+  if (horizontal || vertical) {
+    player.x += horizontal / inputLength * player.speed * deltaTime;
+    player.y += vertical / inputLength * player.speed * deltaTime;
+  }
+
+  const minPosition = WORLD.border + player.radius;
+  const maxPosition = WORLD.width - WORLD.border - player.radius;
+  player.x = Math.max(minPosition, Math.min(maxPosition, player.x));
+  player.y = Math.max(minPosition, Math.min(maxPosition, player.y));
+
+  const correctionStrength = Math.min(1, deltaTime * 8);
+  player.x += (player.authoritativeX - player.x) * correctionStrength;
+  player.y += (player.authoritativeY - player.y) * correctionStrength;
   camera.x = player.x;
   camera.y = player.y;
 }
