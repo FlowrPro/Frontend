@@ -87,6 +87,7 @@ let retractHeld = false;
 let wasDead = false;
 let inventoryAnimationIndex = null;
 let equippedAnimationTarget = null;
+let activeTooltip = null;
 
 function createPetal(petalId, rarityId) {
   return { petalId, rarityId };
@@ -237,6 +238,10 @@ function connectToServer() {
       player.damage = message.player.damage;
       player.reload = message.player.reload;
       player.petalHealth = message.player.petalHealth;
+      player.petalReloads = message.player.petalReloads;
+      player.secondaryPetalHealth = message.player.secondaryPetalHealth;
+      player.secondaryPetalReloads = message.player.secondaryPetalReloads;
+      updateHotbarReloadUi();
       updateDeathState();
       inventory.splice(0, inventory.length, ...message.inventory);
       hotbar.splice(0, hotbar.length, ...message.hotbar);
@@ -261,6 +266,9 @@ function connectToServer() {
       existing.bodyDamage = message.player.bodyDamage;
       existing.hotbar = message.player.hotbar;
       existing.petalHealth = message.player.petalHealth;
+      existing.petalReloads = message.player.petalReloads;
+      existing.secondaryPetalHealth = message.player.secondaryPetalHealth;
+      existing.secondaryPetalReloads = message.player.secondaryPetalReloads;
       existing.expandHeld = message.player.expandHeld;
       existing.retractHeld = message.player.retractHeld;
       existing.orbitRadius = message.player.orbitRadius;
@@ -275,6 +283,10 @@ function connectToServer() {
       player.damage = message.player.damage;
       player.reload = message.player.reload;
       player.petalHealth = message.player.petalHealth;
+      player.petalReloads = message.player.petalReloads;
+      player.secondaryPetalHealth = message.player.secondaryPetalHealth;
+      player.secondaryPetalReloads = message.player.secondaryPetalReloads;
+      updateHotbarReloadUi();
       updateDeathState();
     }
     if (message.type === 'playerLeft') {
@@ -492,6 +504,7 @@ function drawMinimap() {
 }
 
 function showPetalTooltip(slot, petal) {
+  hidePetalTooltip();
   const stats = getPetalStats(petal);
   const tooltip = document.createElement('div');
   tooltip.className = 'petal-tooltip';
@@ -502,14 +515,25 @@ function showPetalTooltip(slot, petal) {
   tooltip.style.left = `${bounds.left + bounds.width / 2}px`;
   tooltip.style.top = `${bounds.top}px`;
   slot._tooltip = tooltip;
+  activeTooltip = tooltip;
 }
 
-function hidePetalTooltip(slot) {
-  if (slot._tooltip) {
-    slot._tooltip.remove();
+function hidePetalTooltip(slot = null) {
+  if (slot && slot._tooltip !== activeTooltip) {
     slot._tooltip = null;
+    return;
+  }
+  if (slot?._tooltip) slot._tooltip = null;
+  if (activeTooltip) {
+    activeTooltip.remove();
+    activeTooltip = null;
   }
 }
+
+document.addEventListener('pointermove', (event) => {
+  if (activeTooltip && !event.target.closest?.('.petal-slot')) hidePetalTooltip();
+});
+window.addEventListener('blur', () => hidePetalTooltip());
 
 function createPetalDragPreview(petal) {
   const stats = getPetalStats(petal);
@@ -533,18 +557,23 @@ function createPetalSlot(kind, index, petal) {
   const slot = document.createElement('button');
   const stats = petal ? getPetalStats(petal) : null;
   const rarity = stats;
+  const reloadBar = kind === 'secondary-hotbar' ? player.secondaryPetalReloads : player.petalReloads;
+  const reloadRemaining = kind === 'inventory' ? 0 : (reloadBar?.[index] || 0);
   slot.type = 'button';
-  slot.className = `petal-slot${rarity ? ` rarity-${rarity.id}` : ' empty'}`;
+  slot.className = `petal-slot${rarity ? ` rarity-${rarity.id}` : ' empty'}${reloadRemaining > 0 ? ' reloading' : ''}`;
   slot.dataset.kind = kind;
   slot.dataset.index = index;
   slot.dataset.slotNumber = index === 9 ? '0' : String(index + 1);
   slot.title = rarity
-    ? `${stats.label} petal | ${rarity.label} | Damage ${stats.damage} | Health ${stats.health} | Reload ${stats.reload}s`
+    ? `${stats.label} petal | ${rarity.label} | Damage ${stats.damage} | Health ${stats.health} | Reload ${stats.reload}s${reloadRemaining > 0 ? ` | Ready in ${reloadRemaining.toFixed(1)}s` : ''}`
     : 'Empty petal slot';
 
   if (rarity) {
     slot.draggable = true;
     slot.innerHTML = '<span class="petal-icon basic"></span>';
+    if (reloadRemaining > 0) {
+      slot.innerHTML += `<span class="petal-reload-overlay" aria-hidden="true"></span><span class="petal-reload-time">${reloadRemaining.toFixed(1)}</span>`;
+    }
     if (kind === 'inventory') {
       slot.innerHTML += `<span class="petal-count">x${inventory[index].count}</span>`;
     }
@@ -559,6 +588,7 @@ function createPetalSlot(kind, index, petal) {
     });
     slot.addEventListener('mouseenter', () => showPetalTooltip(slot, petal));
     slot.addEventListener('mouseleave', () => hidePetalTooltip(slot));
+    slot.addEventListener('pointerleave', () => hidePetalTooltip(slot));
     if (kind === 'inventory') {
       slot.addEventListener('click', () => {
         inventoryAnimationIndex = index;
@@ -584,6 +614,39 @@ function createPetalSlot(kind, index, petal) {
     sendServerAction('store', { sourceBar: kind, sourceSlot: index });
   });
   return slot;
+}
+
+function updateReloadBarUi(container, reloads) {
+  container.querySelectorAll('.petal-slot').forEach((slot) => {
+    const index = Number(slot.dataset.index);
+    const remaining = reloads?.[index] || 0;
+    slot.classList.toggle('reloading', remaining > 0);
+    let overlay = slot.querySelector('.petal-reload-overlay');
+    let time = slot.querySelector('.petal-reload-time');
+    if (remaining > 0) {
+      if (!overlay) {
+        overlay = document.createElement('span');
+        overlay.className = 'petal-reload-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
+        slot.append(overlay);
+      }
+      if (!time) {
+        time = document.createElement('span');
+        time.className = 'petal-reload-time';
+        time.setAttribute('aria-hidden', 'true');
+        slot.append(time);
+      }
+      time.textContent = remaining.toFixed(1);
+    } else {
+      overlay?.remove();
+      time?.remove();
+    }
+  });
+}
+
+function updateHotbarReloadUi() {
+  updateReloadBarUi(hotbarSlots, player.petalReloads);
+  updateReloadBarUi(secondaryHotbarSlots, player.secondaryPetalReloads);
 }
 
 function handlePetalDrop(targetKind, targetIndex) {
@@ -636,6 +699,7 @@ document.addEventListener('drop', (event) => {
 });
 
 function renderPetalUi() {
+  hidePetalTooltip();
   inventoryGrid.replaceChildren();
   [...PETAL_RARITIES].reverse().forEach((rarity) => {
     const stacks = inventory.filter((entry) => entry.rarityId === rarity.id);
