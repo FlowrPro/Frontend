@@ -646,7 +646,7 @@ function createPetalSlot(kind, index, petal) {
 
   if (rarity) {
     slot.draggable = true;
-    slot.innerHTML = '<span class="petal-icon basic"></span>';
+    slot.innerHTML = `<span class="petal-icon basic"></span><span class="petal-name">${stats.label}</span>`;
     if (reloadRemaining > 0) {
       slot.innerHTML += `<span class="petal-reload-overlay" aria-hidden="true"></span><span class="petal-reload-time">${reloadRemaining.toFixed(1)}</span>`;
     }
