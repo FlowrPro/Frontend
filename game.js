@@ -48,6 +48,7 @@ const SERVER_URL = 'wss://backend-v4ok.onrender.com';
 let socket = null;
 let localPlayerId = null;
 const remotePlayers = new Map();
+const mobs = new Map();
 let networkSendTimer = 0;
 let selectedUsername = '';
 let hasStartedGame = false;
@@ -74,7 +75,7 @@ let PETAL_RARITIES = [
   { id: 'ultra', label: 'Ultra', color: '#f5df66', multiplier: 729 },
 ];
 let PETAL_TYPES = {
-  basic: { id: 'basic', label: 'Basic', baseDamage: 10, baseHealth: 10, baseReload: 1.2 },
+  1: { id: 1, label: 'Basic', baseDamage: 10, baseHealth: 10, baseReload: 1.2 },
 };
 let rarityById = new Map(PETAL_RARITIES.map((rarity) => [rarity.id, rarity]));
 const inventory = [];
@@ -123,8 +124,8 @@ function getBar(kind) {
 
 PETAL_RARITIES.forEach((rarity, index) => {
   const rarityId = rarity.id;
-  hotbar[index] = createPetal('basic', rarityId);
-  addToInventory(createPetal('basic', rarityId), 5);
+  hotbar[index] = createPetal(1, rarityId);
+  addToInventory(createPetal(1, rarityId), 5);
 });
 
 grassTexture.src = 'assets/grasstexture.webp';
@@ -135,6 +136,24 @@ borderTexture.addEventListener('load', () => {
   borderPattern = context.createPattern(borderTexture, 'repeat');
 });
 borderTexture.src = 'assets/bordertexture.svg';
+const mobImage = new Image();
+let mobSprite = null;
+mobImage.addEventListener('load', () => {
+  const spriteCanvas = document.createElement('canvas');
+  spriteCanvas.width = mobImage.naturalWidth;
+  spriteCanvas.height = mobImage.naturalHeight;
+  const spriteContext = spriteCanvas.getContext('2d');
+  spriteContext.drawImage(mobImage, 0, 0);
+  const pixels = spriteContext.getImageData(0, 0, spriteCanvas.width, spriteCanvas.height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    if (pixels.data[index] > 242 && pixels.data[index + 1] > 242 && pixels.data[index + 2] > 242) {
+      pixels.data[index + 3] = 0;
+    }
+  }
+  spriteContext.putImageData(pixels, 0, 0);
+  mobSprite = spriteCanvas;
+});
+mobImage.src = 'assets/Rock.webp';
 
 function resize() {
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -186,6 +205,8 @@ function drawWorld() {
   context.lineWidth = 4;
   context.strokeRect(mapLeft + 1, mapTop + 1, mapRight - mapLeft - 2, mapBottom - mapTop - 2);
 
+  drawMobs(worldLeft, worldTop);
+
   remotePlayers.forEach((remotePlayer) => {
     remotePlayer.renderX += (remotePlayer.x - remotePlayer.renderX) * (1 - Math.exp(-14 * frameDelta));
     remotePlayer.renderY += (remotePlayer.y - remotePlayer.renderY) * (1 - Math.exp(-14 * frameDelta));
@@ -212,6 +233,31 @@ function drawWorld() {
   player.retractHeld = retractHeld;
   drawOrbitingPetals(worldLeft + player.x, worldTop + player.y, hotbar, localPlayerId, player, 'hotbar');
   drawPlayer(worldLeft + player.x, worldTop + player.y, selectedUsername, player);
+}
+
+function drawMobs(worldLeft, worldTop) {
+  mobs.forEach((mob) => {
+    if (!mobSprite || mob.health <= 0) return;
+    mob.renderX += (mob.x - mob.renderX) * (1 - Math.exp(-12 * frameDelta));
+    mob.renderY += (mob.y - mob.renderY) * (1 - Math.exp(-12 * frameDelta));
+    const size = mob.size;
+    context.save();
+    context.globalAlpha = 0.98;
+    context.drawImage(mobSprite, worldLeft + mob.renderX - size / 2, worldTop + mob.renderY - size / 2, size, size);
+    context.restore();
+    const healthWidth = Math.min(180, Math.max(70, size * 0.55));
+    const screenX = worldLeft + mob.renderX;
+    const screenY = worldTop + mob.renderY - Math.min(size / 2, 180) - 16;
+    context.fillStyle = 'rgba(38, 20, 14, 0.78)';
+    context.fillRect(screenX - healthWidth / 2, screenY, healthWidth, 7);
+    context.fillStyle = '#ed5b75';
+    context.fillRect(screenX - healthWidth / 2, screenY, healthWidth * Math.max(0, mob.health / mob.maxHealth), 7);
+    context.fillStyle = '#fff8dc';
+    context.font = '800 12px Nunito, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'bottom';
+    context.fillText(`${mob.rarityId} ${mob.name || 'Rock'}`, screenX, screenY - 4);
+  });
 }
 
 function connectToServer() {
@@ -245,6 +291,7 @@ function connectToServer() {
       PETAL_RARITIES = message.petalRarities;
       PETAL_TYPES = message.petalTypes;
       rarityById = new Map(PETAL_RARITIES.map((rarity) => [rarity.id, rarity]));
+      updateMobState(message.mobs || []);
       player.x = message.player.x;
       player.y = message.player.y;
       player.authoritativeX = message.player.x;
@@ -277,8 +324,9 @@ function connectToServer() {
       message.player.renderY = message.player.y;
       remotePlayers.set(message.player.id, message.player);
     }
-    if (message.type === 'playersUpdated') {
+    if (message.type === 'worldUpdated') {
       message.players.forEach(applyNetworkPlayerUpdate);
+      updateMobState(message.mobs || []);
     }
     if (message.type === 'playerLeft') {
       remotePlayers.delete(message.playerId);
@@ -293,6 +341,16 @@ function connectToServer() {
     remotePlayers.clear();
     if (hasStartedGame) window.setTimeout(connectToServer, 3000);
   }, { once: true });
+}
+
+function updateMobState(networkMobs) {
+  networkMobs.forEach((networkMob) => {
+    const existing = mobs.get(networkMob.id) || networkMob;
+    existing.renderX = existing.renderX ?? networkMob.x;
+    existing.renderY = existing.renderY ?? networkMob.y;
+    Object.assign(existing, networkMob);
+    mobs.set(networkMob.id, existing);
+  });
 }
 
 function sendPlayerPosition(force = false) {
