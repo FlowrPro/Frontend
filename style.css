@@ -163,6 +163,7 @@ body {
 }
 
 #action-rail,
+#chat-panel,
 #inventory-panel,
 #hotbar,
 #secondary-hotbar {
@@ -174,8 +175,58 @@ body {
   left: clamp(14px, 3vw, 32px);
   bottom: clamp(14px, 3vw, 28px);
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: row;
   gap: 8px;
+}
+
+#chat-panel {
+  left: 88px;
+  bottom: clamp(14px, 3vw, 28px);
+  display: flex;
+  flex-direction: column;
+  width: min(280px, calc(100vw - 110px));
+  height: 190px;
+  padding: 10px;
+  border: 1px solid rgba(255, 245, 205, 0.3);
+  border-radius: 10px;
+  background: rgba(45, 31, 21, 0.94);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35), inset 0 1px rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(7px);
+}
+
+#chat-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  color: #fff4c9;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#chat-messages p {
+  margin: 0 0 7px;
+  overflow-wrap: anywhere;
+}
+
+#chat-messages strong {
+  color: #f2d86c;
+}
+
+#chat-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(255, 245, 205, 0.3);
+  border-radius: 6px;
+  color: #40321c;
+  background: #fff8dc;
+  font: inherit;
+  outline: none;
+}
+
+#chat-input:focus {
+  border-color: #ffe27a;
+  box-shadow: 0 0 0 2px rgba(255, 226, 122, 0.25);
 }
 
 .action-button,
@@ -442,6 +493,12 @@ body {
   #action-rail {
     left: 10px;
     bottom: 10px;
+  }
+
+  #chat-panel {
+    left: 68px;
+    bottom: 10px;
+    width: calc(100vw - 78px);
   }
 
   .action-button {

@@ -7,6 +7,10 @@ const inventoryGrid = document.querySelector('#inventory-grid');
 const hotbarSlots = document.querySelector('#hotbar-slots');
 const secondaryHotbarSlots = document.querySelector('#secondary-hotbar-slots');
 const inventoryButton = document.querySelector('[data-action="inventory"]');
+const chatButton = document.querySelector('[data-action="chat"]');
+const chatPanel = document.querySelector('#chat-panel');
+const chatMessages = document.querySelector('#chat-messages');
+const chatInput = document.querySelector('#chat-input');
 const inventoryClose = document.querySelector('#inventory-close');
 const homeScreen = document.querySelector('#home-screen');
 const gameShell = document.querySelector('#game-shell');
@@ -31,6 +35,8 @@ const player = {
   renderY: WORLD.spawnY,
   radius: 31,
   speed: 310,
+  velocityX: 0,
+  velocityY: 0,
 };
 
 const SERVER_URL = 'wss://backend-v4ok.onrender.com';
@@ -40,6 +46,8 @@ const remotePlayers = new Map();
 let networkSendTimer = 0;
 let selectedUsername = '';
 let hasStartedGame = false;
+const MOVEMENT_ACCELERATION = 1700;
+const MOVEMENT_DECELERATION = 2100;
 
 const camera = { x: player.x, y: player.y };
 const keys = new Set();
@@ -247,6 +255,9 @@ function connectToServer() {
     if (message.type === 'playerLeft') {
       remotePlayers.delete(message.playerId);
     }
+    if (message.type === 'chat' && typeof message.username === 'string' && typeof message.text === 'string') {
+      appendChatMessage(message.username, message.text);
+    }
   });
 
   socket.addEventListener('close', () => {
@@ -271,6 +282,21 @@ function sendServerAction(action, data = {}) {
   if (!socket || socket.readyState !== WebSocket.OPEN) return false;
   socket.send(JSON.stringify({ type: 'action', action, ...data }));
   return true;
+}
+
+function toggleChat(isOpen = chatPanel.hidden) {
+  chatPanel.hidden = !isOpen;
+  chatButton.setAttribute('aria-expanded', String(isOpen));
+  if (isOpen) chatInput.focus();
+}
+
+function appendChatMessage(username, text) {
+  const message = document.createElement('p');
+  const name = document.createElement('strong');
+  name.textContent = `${username}:`;
+  message.append(name, ` ${text}`);
+  chatMessages.append(message);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'local') {
@@ -560,10 +586,13 @@ function movePlayer(deltaTime) {
   const vertical = (keys.has('ArrowDown') || keys.has('s') ? 1 : 0)
     - (keys.has('ArrowUp') || keys.has('w') ? 1 : 0);
   const inputLength = Math.hypot(horizontal, vertical) || 1;
-  if (horizontal || vertical) {
-    player.x += horizontal / inputLength * player.speed * deltaTime;
-    player.y += vertical / inputLength * player.speed * deltaTime;
-  }
+  const targetVelocityX = horizontal / inputLength * player.speed;
+  const targetVelocityY = vertical / inputLength * player.speed;
+  const velocityStep = (horizontal || vertical ? MOVEMENT_ACCELERATION : MOVEMENT_DECELERATION) * deltaTime;
+  player.velocityX += Math.max(-velocityStep, Math.min(velocityStep, targetVelocityX - player.velocityX));
+  player.velocityY += Math.max(-velocityStep, Math.min(velocityStep, targetVelocityY - player.velocityY));
+  player.x += player.velocityX * deltaTime;
+  player.y += player.velocityY * deltaTime;
 
   const minPosition = WORLD.border + player.radius;
   const maxPosition = WORLD.width - WORLD.border - player.radius;
@@ -589,6 +618,23 @@ function gameLoop(currentTime) {
 
 window.addEventListener('resize', resize);
 window.addEventListener('keydown', (event) => {
+  if (event.target === chatInput) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const text = chatInput.value.trim();
+      if (text && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'chat', text }));
+        chatInput.value = '';
+      }
+    }
+    if (event.key === 'Escape') toggleChat(false);
+    return;
+  }
+  if (event.key === 'Enter' && hasStartedGame) {
+    event.preventDefault();
+    toggleChat(true);
+    return;
+  }
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(event.key)) {
     event.preventDefault();
@@ -603,6 +649,7 @@ window.addEventListener('keydown', (event) => {
   keys.add(key);
 });
 window.addEventListener('keyup', (event) => {
+  if (event.target === chatInput) return;
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
   if (event.key === ' ') expandHeld = false;
   if (event.key === 'Shift') retractHeld = false;
@@ -625,6 +672,7 @@ window.addEventListener('blur', () => {
 
 inventoryButton.addEventListener('click', () => toggleInventory());
 inventoryClose.addEventListener('click', () => toggleInventory(false));
+chatButton.addEventListener('click', () => toggleChat());
 playForm.addEventListener('submit', (event) => {
   event.preventDefault();
   selectedUsername = usernameInput.value.trim().replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 16) || 'Guest';

@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Meadow IO</title>
+  <title>Moborr.io</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main id="game-shell" aria-label="Meadow IO game" hidden>
+  <main id="game-shell" aria-label="Moborr.io game" hidden>
     <canvas id="game-canvas" aria-label="Playable meadow map"></canvas>
     <aside id="minimap-panel" aria-label="Minimap">
       <canvas id="minimap-canvas"></canvas>
@@ -16,7 +16,13 @@
       <button class="action-button" type="button" data-action="inventory" aria-label="Open inventory" aria-expanded="false">
         <img src="assets/backpack.svg" alt="">
       </button>
+      <button class="action-button chat-button" type="button" data-action="chat" aria-label="Open chat" aria-expanded="false">Chat</button>
     </nav>
+    <section id="chat-panel" aria-label="Chat" hidden>
+      <div id="chat-messages" aria-live="polite"></div>
+      <label class="sr-only" for="chat-input">Chat message</label>
+      <input id="chat-input" maxlength="180" autocomplete="off" placeholder="Type a message...">
+    </section>
     <section id="inventory-panel" aria-label="Petal inventory" hidden>
       <header class="inventory-header">
         <h2>Inventory</h2>
