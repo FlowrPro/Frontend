@@ -606,6 +606,23 @@ function handlePetalDrop(targetKind, targetIndex) {
   }
 }
 
+document.addEventListener('dragover', (event) => {
+  if (!draggedPetal) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+});
+
+document.addEventListener('drop', (event) => {
+  if (!draggedPetal || !['hotbar', 'secondary-hotbar'].includes(draggedPetal.kind)) return;
+  if (event.target.closest('.petal-slot')) return;
+  event.preventDefault();
+  sendServerAction('store', {
+    sourceBar: draggedPetal.kind,
+    sourceSlot: draggedPetal.index,
+  });
+  draggedPetal = null;
+});
+
 function renderPetalUi() {
   inventoryGrid.replaceChildren();
   [...PETAL_RARITIES].reverse().forEach((rarity) => {
