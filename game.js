@@ -59,6 +59,7 @@ const camera = { x: player.x, y: player.y };
 const keys = new Set();
 const grassTexture = new Image();
 const borderTexture = new Image();
+const rockImage = new Image();
 let grassPattern = null;
 let borderPattern = null;
 const grassTextureScale = 0.5;
@@ -136,6 +137,7 @@ borderTexture.addEventListener('load', () => {
   borderPattern = context.createPattern(borderTexture, 'repeat');
 });
 borderTexture.src = 'assets/bordertexture.svg';
+rockImage.src = 'assets/Rock';
 
 function resize() {
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -251,57 +253,8 @@ function drawMobs(worldLeft, worldTop) {
 }
 
 function drawRock(screenX, screenY, size) {
-  const halfSize = size / 2;
-  const points = [
-    [-0.46, 0.28], [-0.42, -0.12], [-0.26, -0.38], [0.08, -0.47],
-    [0.35, -0.3], [0.47, 0.02], [0.39, 0.31], [0.08, 0.46], [-0.23, 0.43],
-  ];
-  const path = new Path2D();
-  points.forEach(([x, y], index) => {
-    const pointX = screenX + x * halfSize * 2;
-    const pointY = screenY + y * halfSize * 2;
-    if (index === 0) path.moveTo(pointX, pointY);
-    else path.lineTo(pointX, pointY);
-  });
-  path.closePath();
-
-  context.save();
-  context.shadowColor = 'rgba(22, 18, 15, 0.42)';
-  context.shadowBlur = Math.max(5, size * 0.05);
-  context.shadowOffsetY = Math.max(3, size * 0.035);
-  const gradient = context.createLinearGradient(screenX, screenY - halfSize, screenX, screenY + halfSize);
-  gradient.addColorStop(0, '#aeb5bd');
-  gradient.addColorStop(0.48, '#7d858f');
-  gradient.addColorStop(1, '#555d67');
-  context.fillStyle = gradient;
-  context.fill(path);
-  context.shadowColor = 'transparent';
-  context.strokeStyle = '#343b44';
-  context.lineWidth = Math.max(2, size * 0.035);
-  context.lineJoin = 'round';
-  context.stroke(path);
-
-  context.globalAlpha *= 0.55;
-  context.fillStyle = '#d5dae0';
-  context.beginPath();
-  context.moveTo(screenX - halfSize * 0.28, screenY - halfSize * 0.6);
-  context.lineTo(screenX + halfSize * 0.08, screenY - halfSize * 0.7);
-  context.lineTo(screenX + halfSize * 0.26, screenY - halfSize * 0.34);
-  context.lineTo(screenX - halfSize * 0.04, screenY - halfSize * 0.2);
-  context.closePath();
-  context.fill();
-
-  context.globalAlpha *= 0.45;
-  context.fillStyle = '#39414b';
-  context.beginPath();
-  context.moveTo(screenX + halfSize * 0.06, screenY + halfSize * 0.08);
-  context.lineTo(screenX + halfSize * 0.42, screenY - halfSize * 0.03);
-  context.lineTo(screenX + halfSize * 0.31, screenY + halfSize * 0.42);
-  context.lineTo(screenX - halfSize * 0.03, screenY + halfSize * 0.54);
-  context.lineTo(screenX - halfSize * 0.11, screenY + halfSize * 0.2);
-  context.closePath();
-  context.fill();
-  context.restore();
+  if (!rockImage.complete || rockImage.naturalWidth === 0) return;
+  context.drawImage(rockImage, screenX - size / 2, screenY - size / 2, size, size);
 }
 
 function connectToServer() {
