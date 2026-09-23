@@ -88,6 +88,7 @@ let wasDead = false;
 let inventoryAnimationIndex = null;
 let equippedAnimationTarget = null;
 let activeTooltip = null;
+let pendingSwapAnimation = null;
 
 function createPetal(petalId, rarityId) {
   return { petalId, rarityId };
@@ -539,18 +540,39 @@ function createPetalDragPreview(petal) {
   const stats = getPetalStats(petal);
   const preview = document.createElement('canvas');
   const previewContext = preview.getContext('2d');
-  preview.width = 64;
-  preview.height = 64;
+  preview.width = 88;
+  preview.height = 88;
   previewContext.fillStyle = stats.color;
-  previewContext.fillRect(2, 2, 60, 60);
+  previewContext.fillRect(2, 2, 84, 84);
+  previewContext.strokeStyle = 'rgba(255, 255, 255, 0.82)';
+  previewContext.lineWidth = 2;
+  previewContext.strokeRect(2, 2, 84, 84);
+  previewContext.fillStyle = stats.color;
   previewContext.fillStyle = '#fff';
   previewContext.strokeStyle = 'rgba(65, 65, 65, 0.45)';
   previewContext.lineWidth = 2;
   previewContext.beginPath();
-  previewContext.arc(32, 32, 16, 0, Math.PI * 2);
+  previewContext.arc(44, 44, 22, 0, Math.PI * 2);
   previewContext.fill();
   previewContext.stroke();
   return preview;
+}
+
+function createDragFadeGhost(slot, petal) {
+  if (!slot) return;
+  const bounds = slot.getBoundingClientRect();
+  const ghost = slot.cloneNode(true);
+  ghost.classList.remove('is-reloading', 'is-swapping');
+  ghost.classList.add('petal-drag-fade');
+  ghost.style.left = `${bounds.left}px`;
+  ghost.style.top = `${bounds.top}px`;
+  ghost.style.width = `${bounds.width}px`;
+  ghost.style.height = `${bounds.height}px`;
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.removeAttribute('data-kind');
+  ghost.removeAttribute('data-index');
+  document.body.append(ghost);
+  window.setTimeout(() => ghost.remove(), 460);
 }
 
 function createPetalSlot(kind, index, petal) {
@@ -672,6 +694,12 @@ function handlePetalDrop(targetKind, targetIndex) {
       targetSlot: targetIndex,
     });
   } else if (draggedPetal.kind === 'hotbar' || draggedPetal.kind === 'secondary-hotbar') {
+    pendingSwapAnimation = {
+      sourceBar: draggedPetal.kind,
+      sourceSlot: draggedPetal.index,
+      targetBar: targetKind,
+      targetSlot: targetIndex,
+    };
     sendServerAction('swapSlots', {
       sourceBar: draggedPetal.kind,
       sourceSlot: draggedPetal.index,
@@ -691,6 +719,8 @@ document.addEventListener('drop', (event) => {
   if (!draggedPetal || !['hotbar', 'secondary-hotbar'].includes(draggedPetal.kind)) return;
   if (event.target.closest('.petal-slot')) return;
   event.preventDefault();
+  const sourceSlot = document.querySelector(`[data-kind="${draggedPetal.kind}"][data-index="${draggedPetal.index}"]`);
+  createDragFadeGhost(sourceSlot, draggedPetal.petal);
   sendServerAction('store', {
     sourceBar: draggedPetal.kind,
     sourceSlot: draggedPetal.index,
@@ -729,6 +759,15 @@ function renderPetalUi() {
     const targetSlot = bar.querySelector(`[data-kind="${equippedAnimationTarget.targetBar}"][data-index="${equippedAnimationTarget.targetSlot}"]`);
     targetSlot?.classList.add('is-equipped');
     equippedAnimationTarget = null;
+  }
+  if (pendingSwapAnimation) {
+    const sourceContainer = pendingSwapAnimation.sourceBar === 'hotbar' ? hotbarSlots : secondaryHotbarSlots;
+    const targetContainer = pendingSwapAnimation.targetBar === 'hotbar' ? hotbarSlots : secondaryHotbarSlots;
+    sourceContainer.querySelector(`[data-kind="${pendingSwapAnimation.sourceBar}"][data-index="${pendingSwapAnimation.sourceSlot}"]`)
+      ?.classList.add('is-swap-source');
+    targetContainer.querySelector(`[data-kind="${pendingSwapAnimation.targetBar}"][data-index="${pendingSwapAnimation.targetSlot}"]`)
+      ?.classList.add('is-swap-target');
+    pendingSwapAnimation = null;
   }
 }
 

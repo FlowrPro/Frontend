@@ -386,6 +386,24 @@ body {
   animation: petal-equip-target 420ms cubic-bezier(0.2, 0.9, 0.25, 1.2);
 }
 
+.petal-slot.is-swap-source {
+  animation: petal-swap-source 460ms cubic-bezier(0.2, 0.8, 0.25, 1.2);
+  z-index: 2;
+}
+
+.petal-slot.is-swap-target {
+  animation: petal-swap-target 460ms cubic-bezier(0.2, 0.8, 0.25, 1.2);
+  z-index: 2;
+}
+
+.petal-drag-fade {
+  position: fixed;
+  z-index: 20;
+  margin: 0;
+  pointer-events: none;
+  animation: petal-drag-fade 440ms ease-out forwards;
+}
+
 .petal-slot.reloading {
   animation: petal-reload-pulse 900ms ease-in-out infinite;
 }
@@ -434,6 +452,23 @@ body {
   0% { transform: scale(0.7); opacity: 0.35; }
   65% { transform: scale(1.12); }
   100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes petal-swap-source {
+  0% { transform: scale(1) rotate(0); }
+  45% { transform: scale(0.82) rotate(-7deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+@keyframes petal-swap-target {
+  0% { transform: scale(1) rotate(0); }
+  45% { transform: scale(1.14) rotate(7deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+@keyframes petal-drag-fade {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.72) translateY(-8px); opacity: 0; }
 }
 
 .petal-slot:active {
