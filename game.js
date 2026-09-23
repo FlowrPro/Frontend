@@ -156,7 +156,7 @@ mobImage.addEventListener('load', () => {
   spriteContext.putImageData(pixels, 0, 0);
   mobSprite = spriteCanvas;
 });
-mobImage.src = 'assets/Rock.webp';
+mobImage.src = 'assets/Rock.png';
 
 function resize() {
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
