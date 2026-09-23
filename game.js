@@ -137,7 +137,7 @@ borderTexture.addEventListener('load', () => {
   borderPattern = context.createPattern(borderTexture, 'repeat');
 });
 borderTexture.src = 'assets/bordertexture.svg';
-rockImage.src = 'assets/Rock';
+rockImage.src = 'assets/Rock.png';
 
 function resize() {
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
