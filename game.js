@@ -618,6 +618,11 @@ function gameLoop(currentTime) {
 
 window.addEventListener('resize', resize);
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !chatPanel.hidden) {
+    event.preventDefault();
+    toggleChat(false);
+    return;
+  }
   if (event.target === chatInput) {
     if (event.key === 'Enter') {
       event.preventDefault();
@@ -625,9 +630,9 @@ window.addEventListener('keydown', (event) => {
       if (text && socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: 'chat', text }));
         chatInput.value = '';
+        toggleChat(false);
       }
     }
-    if (event.key === 'Escape') toggleChat(false);
     return;
   }
   if (event.key === 'Enter' && hasStartedGame) {
