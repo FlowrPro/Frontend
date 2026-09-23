@@ -7,7 +7,6 @@ const inventoryGrid = document.querySelector('#inventory-grid');
 const hotbarSlots = document.querySelector('#hotbar-slots');
 const secondaryHotbarSlots = document.querySelector('#secondary-hotbar-slots');
 const inventoryButton = document.querySelector('[data-action="inventory"]');
-const chatButton = document.querySelector('[data-action="chat"]');
 const chatPanel = document.querySelector('#chat-panel');
 const chatMessages = document.querySelector('#chat-messages');
 const chatInput = document.querySelector('#chat-input');
@@ -70,7 +69,7 @@ let PETAL_RARITIES = [
   { id: 'ultra', label: 'Ultra', color: '#f5df66', multiplier: 729 },
 ];
 let PETAL_TYPES = {
-  basic: { id: 'basic', label: 'Basic', baseDamage: 5, baseHealth: 10, baseReload: 1.2 },
+  basic: { id: 'basic', label: 'Basic', baseDamage: 10, baseHealth: 10, baseReload: 1.2 },
 };
 let rarityById = new Map(PETAL_RARITIES.map((rarity) => [rarity.id, rarity]));
 const inventory = [];
@@ -179,14 +178,14 @@ function drawWorld() {
     remotePlayer.renderX += (remotePlayer.x - remotePlayer.renderX) * (1 - Math.exp(-14 * frameDelta));
     remotePlayer.renderY += (remotePlayer.y - remotePlayer.renderY) * (1 - Math.exp(-14 * frameDelta));
     drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id, remotePlayer);
-    drawPlayer(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.username);
+    drawPlayer(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.username, remotePlayer);
   });
   player.renderX = player.x;
   player.renderY = player.y;
   player.expandHeld = expandHeld;
   player.retractHeld = retractHeld;
   drawOrbitingPetals(worldLeft + player.x, worldTop + player.y, hotbar, localPlayerId, player);
-  drawPlayer(worldLeft + player.x, worldTop + player.y, selectedUsername);
+  drawPlayer(worldLeft + player.x, worldTop + player.y, selectedUsername, player);
 }
 
 function connectToServer() {
@@ -227,8 +226,11 @@ function connectToServer() {
       player.renderX = player.renderX || player.x;
       player.renderY = player.renderY || player.y;
       player.health = message.player.health;
+      player.maxHealth = message.player.maxHealth;
+      player.bodyDamage = message.player.bodyDamage;
       player.damage = message.player.damage;
       player.reload = message.player.reload;
+      player.petalHealth = message.player.petalHealth;
       inventory.splice(0, inventory.length, ...message.inventory);
       hotbar.splice(0, hotbar.length, ...message.hotbar);
       secondaryHotbar.splice(0, secondaryHotbar.length, ...message.secondaryHotbar);
@@ -244,15 +246,26 @@ function connectToServer() {
       existing.x = message.player.x;
       existing.y = message.player.y;
       existing.username = message.player.username;
+      existing.health = message.player.health;
+      existing.maxHealth = message.player.maxHealth;
+      existing.bodyDamage = message.player.bodyDamage;
       existing.hotbar = message.player.hotbar;
+      existing.petalHealth = message.player.petalHealth;
+      existing.expandHeld = message.player.expandHeld;
+      existing.retractHeld = message.player.retractHeld;
+      existing.orbitRadius = message.player.orbitRadius;
       remotePlayers.set(message.player.id, existing);
     }
     if (message.type === 'playerUpdated' && message.player.id === localPlayerId) {
       player.authoritativeX = message.player.x;
       player.authoritativeY = message.player.y;
       player.health = message.player.health;
+      player.maxHealth = message.player.maxHealth;
+      player.bodyDamage = message.player.bodyDamage;
       player.damage = message.player.damage;
       player.reload = message.player.reload;
+      player.petalHealth = message.player.petalHealth;
+      player.orbitRadius = message.player.orbitRadius;
     }
     if (message.type === 'playerLeft') {
       remotePlayers.delete(message.playerId);
@@ -286,9 +299,13 @@ function sendServerAction(action, data = {}) {
   return true;
 }
 
+function sendPetalControl() {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ type: 'petalControl', expandHeld, retractHeld }));
+}
+
 function toggleChat(isOpen = chatPanel.hidden) {
   chatPanel.hidden = !isOpen;
-  chatButton.setAttribute('aria-expanded', String(isOpen));
   if (isOpen) chatInput.focus();
 }
 
@@ -302,7 +319,9 @@ function appendChatMessage(username, text) {
 }
 
 function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'local', orbitState = {}) {
-  const equippedPetals = equippedBar.filter(Boolean);
+  const equippedPetals = equippedBar
+    .map((petal, slot) => ({ petal, slot }))
+    .filter(({ petal, slot }) => petal && (!orbitState.petalHealth || orbitState.petalHealth[slot] > 0));
   const defaultRadius = 86;
   const expandedRadius = 145;
   const retractedRadius = 46;
@@ -318,7 +337,7 @@ function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'l
     drawPetal(
       screenX + Math.cos(angle) * orbitState.orbitRadius,
       screenY + Math.sin(angle) * orbitState.orbitRadius,
-      getPetalStats(petal),
+      getPetalStats(petal.petal),
       angle + Math.PI / 2,
       21,
     );
@@ -342,9 +361,9 @@ function drawPetal(screenX, screenY, rarity, rotation, size) {
   context.restore();
 }
 
-function drawPlayer(screenX, screenY, username = '') {
+function drawPlayer(screenX, screenY, username = '', playerState = player) {
   const pulse = Math.sin(performance.now() / 240) * 0.8;
-  const radius = player.radius + pulse;
+  const radius = playerState.radius + pulse;
 
   context.save();
   context.translate(screenX, screenY);
@@ -385,6 +404,20 @@ function drawPlayer(screenX, screenY, username = '') {
     context.textAlign = 'center';
     context.textBaseline = 'top';
     context.fillText(username, 0, radius + 10);
+    const maxHealth = Math.max(1, playerState.maxHealth || 100);
+    const health = Math.max(0, Math.min(maxHealth, playerState.health ?? maxHealth));
+    const healthWidth = 76;
+    const healthTop = radius + 29;
+    context.fillStyle = 'rgba(38, 20, 14, 0.78)';
+    context.fillRect(-healthWidth / 2, healthTop, healthWidth, 6);
+    context.fillStyle = health > maxHealth * 0.35 ? '#55c878' : '#ed5b75';
+    context.fillRect(-healthWidth / 2, healthTop, healthWidth * (health / maxHealth), 6);
+    context.strokeStyle = 'rgba(255, 248, 220, 0.7)';
+    context.lineWidth = 1;
+    context.strokeRect(-healthWidth / 2, healthTop, healthWidth, 6);
+    context.fillStyle = '#fff8dc';
+    context.font = '700 10px Nunito, sans-serif';
+    context.fillText(`${Math.ceil(health)} / ${Math.ceil(maxHealth)}`, 0, healthTop + 8);
   }
   context.restore();
 }
@@ -647,8 +680,14 @@ window.addEventListener('keydown', (event) => {
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(event.key)) {
     event.preventDefault();
   }
-  if (event.key === ' ') expandHeld = true;
-  if (event.key === 'Shift') retractHeld = true;
+  if (event.key === ' ') {
+    expandHeld = true;
+    sendPetalControl();
+  }
+  if (event.key === 'Shift') {
+    retractHeld = true;
+    sendPetalControl();
+  }
   if (/^[0-9]$/.test(event.key)) {
     const slotIndex = event.key === '0' ? 9 : Number(event.key) - 1;
     swapHotbarSlot(slotIndex);
@@ -659,28 +698,36 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => {
   if (event.target === chatInput) return;
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-  if (event.key === ' ') expandHeld = false;
-  if (event.key === 'Shift') retractHeld = false;
+  if (event.key === ' ') {
+    expandHeld = false;
+    sendPetalControl();
+  }
+  if (event.key === 'Shift') {
+    retractHeld = false;
+    sendPetalControl();
+  }
   keys.delete(key);
 });
 
 canvas.addEventListener('mousedown', (event) => {
   if (event.button === 0) expandHeld = true;
   if (event.button === 2) retractHeld = true;
+  sendPetalControl();
 });
 window.addEventListener('mouseup', (event) => {
   if (event.button === 0) expandHeld = false;
   if (event.button === 2) retractHeld = false;
+  sendPetalControl();
 });
 canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 window.addEventListener('blur', () => {
   expandHeld = false;
   retractHeld = false;
+  sendPetalControl();
 });
 
 inventoryButton.addEventListener('click', () => toggleInventory());
 inventoryClose.addEventListener('click', () => toggleInventory(false));
-chatButton.addEventListener('click', () => toggleChat());
 playForm.addEventListener('submit', (event) => {
   event.preventDefault();
   selectedUsername = usernameInput.value.trim().replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 16) || 'Guest';
