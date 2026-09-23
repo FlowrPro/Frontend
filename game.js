@@ -274,50 +274,8 @@ function connectToServer() {
       message.player.renderY = message.player.y;
       remotePlayers.set(message.player.id, message.player);
     }
-    if (message.type === 'playerUpdated' && message.player.id !== localPlayerId) {
-      const existing = remotePlayers.get(message.player.id) || message.player;
-      const wasDead = existing.health <= 0;
-      const previousRenderX = existing.renderX ?? existing.x;
-      const previousRenderY = existing.renderY ?? existing.y;
-      existing.x = message.player.x;
-      existing.y = message.player.y;
-      existing.username = message.player.username;
-      existing.health = message.player.health;
-      existing.maxHealth = message.player.maxHealth;
-      existing.bodyDamage = message.player.bodyDamage;
-      existing.hotbar = message.player.hotbar;
-      existing.petalHealth = message.player.petalHealth;
-      existing.petalReloads = message.player.petalReloads;
-      existing.secondaryPetalHealth = message.player.secondaryPetalHealth;
-      existing.secondaryPetalReloads = message.player.secondaryPetalReloads;
-      existing.expandHeld = message.player.expandHeld;
-      existing.retractHeld = message.player.retractHeld;
-      existing.orbitRadius = message.player.orbitRadius;
-      if (wasDead && existing.health > 0) {
-        existing.respawnFade = {
-          x: previousRenderX,
-          y: previousRenderY,
-          startedAt: performance.now(),
-        };
-      }
-      remotePlayers.set(message.player.id, existing);
-    }
-    if (message.type === 'playerUpdated' && message.player.id === localPlayerId) {
-      player.authoritativeX = message.player.x;
-      player.authoritativeY = message.player.y;
-      player.authoritativeVelocityX = message.player.velocityX || 0;
-      player.authoritativeVelocityY = message.player.velocityY || 0;
-      player.health = message.player.health;
-      player.maxHealth = message.player.maxHealth;
-      player.bodyDamage = message.player.bodyDamage;
-      player.damage = message.player.damage;
-      player.reload = message.player.reload;
-      player.petalHealth = message.player.petalHealth;
-      player.petalReloads = message.player.petalReloads;
-      player.secondaryPetalHealth = message.player.secondaryPetalHealth;
-      player.secondaryPetalReloads = message.player.secondaryPetalReloads;
-      updateHotbarReloadUi();
-      updateDeathState();
+    if (message.type === 'playersUpdated') {
+      message.players.forEach(applyNetworkPlayerUpdate);
     }
     if (message.type === 'playerLeft') {
       remotePlayers.delete(message.playerId);
@@ -343,6 +301,41 @@ function sendPlayerPosition(force = false) {
     y: (keys.has('ArrowDown') || keys.has('s') ? 1 : 0) - (keys.has('ArrowUp') || keys.has('w') ? 1 : 0),
   };
   socket.send(JSON.stringify({ type: 'input', ...input }));
+}
+
+function applyNetworkPlayerUpdate(networkPlayer) {
+  if (networkPlayer.id === localPlayerId) {
+    player.authoritativeX = networkPlayer.x;
+    player.authoritativeY = networkPlayer.y;
+    player.authoritativeVelocityX = networkPlayer.velocityX || 0;
+    player.authoritativeVelocityY = networkPlayer.velocityY || 0;
+    player.health = networkPlayer.health;
+    player.maxHealth = networkPlayer.maxHealth;
+    player.bodyDamage = networkPlayer.bodyDamage;
+    player.damage = networkPlayer.damage;
+    player.reload = networkPlayer.reload;
+    player.petalHealth = networkPlayer.petalHealth;
+    player.petalReloads = networkPlayer.petalReloads;
+    player.secondaryPetalHealth = networkPlayer.secondaryPetalHealth;
+    player.secondaryPetalReloads = networkPlayer.secondaryPetalReloads;
+    updateHotbarReloadUi();
+    updateDeathState();
+    return;
+  }
+
+  const existing = remotePlayers.get(networkPlayer.id) || networkPlayer;
+  const wasDead = existing.health <= 0;
+  const previousRenderX = existing.renderX ?? existing.x;
+  const previousRenderY = existing.renderY ?? existing.y;
+  Object.assign(existing, networkPlayer);
+  if (wasDead && existing.health > 0) {
+    existing.respawnFade = {
+      x: previousRenderX,
+      y: previousRenderY,
+      startedAt: performance.now(),
+    };
+  }
+  remotePlayers.set(networkPlayer.id, existing);
 }
 
 function sendServerAction(action, data = {}) {
