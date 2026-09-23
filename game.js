@@ -146,7 +146,10 @@ mobImage.addEventListener('load', () => {
   spriteContext.drawImage(mobImage, 0, 0);
   const pixels = spriteContext.getImageData(0, 0, spriteCanvas.width, spriteCanvas.height);
   for (let index = 0; index < pixels.data.length; index += 4) {
-    if (pixels.data[index] > 242 && pixels.data[index + 1] > 242 && pixels.data[index + 2] > 242) {
+    const red = pixels.data[index];
+    const green = pixels.data[index + 1];
+    const blue = pixels.data[index + 2];
+    if (red > 220 && green > 220 && blue > 220 && Math.max(red, green, blue) - Math.min(red, green, blue) < 35) {
       pixels.data[index + 3] = 0;
     }
   }
@@ -237,12 +240,19 @@ function drawWorld() {
 
 function drawMobs(worldLeft, worldTop) {
   mobs.forEach((mob) => {
-    if (!mobSprite || mob.health <= 0) return;
+    if (!mobSprite) return;
+    const deathFade = mob.deathFade;
+    if (mob.health <= 0 && !deathFade) return;
     mob.renderX += (mob.x - mob.renderX) * (1 - Math.exp(-12 * frameDelta));
     mob.renderY += (mob.y - mob.renderY) * (1 - Math.exp(-12 * frameDelta));
     const size = mob.size;
+    const fadeProgress = deathFade ? Math.min(1, (performance.now() - deathFade.startedAt) / 700) : 0;
+    if (deathFade && fadeProgress >= 1) {
+      mob.deathFade = null;
+      return;
+    }
     context.save();
-    context.globalAlpha = 0.98;
+    context.globalAlpha = deathFade ? 0.98 * (1 - fadeProgress) : 0.98;
     context.drawImage(mobSprite, worldLeft + mob.renderX - size / 2, worldTop + mob.renderY - size / 2, size, size);
     context.restore();
     const healthWidth = Math.min(180, Math.max(70, size * 0.55));
@@ -350,6 +360,9 @@ function updateMobState(networkMobs) {
     const existing = mobs.get(networkMob.id) || networkMob;
     existing.renderX = existing.renderX ?? networkMob.x;
     existing.renderY = existing.renderY ?? networkMob.y;
+    if (existing.health > 0 && networkMob.health <= 0) {
+      existing.deathFade = { startedAt: performance.now() };
+    }
     Object.assign(existing, networkMob);
     mobs.set(networkMob.id, existing);
   });
