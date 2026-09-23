@@ -10,6 +10,8 @@ const inventoryButton = document.querySelector('[data-action="inventory"]');
 const chatPanel = document.querySelector('#chat-panel');
 const chatMessages = document.querySelector('#chat-messages');
 const chatInput = document.querySelector('#chat-input');
+const deathOverlay = document.querySelector('#death-overlay');
+const respawnButton = document.querySelector('#respawn-button');
 const inventoryClose = document.querySelector('#inventory-close');
 const homeScreen = document.querySelector('#home-screen');
 const gameShell = document.querySelector('#game-shell');
@@ -82,6 +84,7 @@ let lastTime = performance.now();
 let frameDelta = 1 / 60;
 let expandHeld = false;
 let retractHeld = false;
+let wasDead = false;
 
 function createPetal(petalId, rarityId) {
   return { petalId, rarityId };
@@ -175,6 +178,7 @@ function drawWorld() {
   context.strokeRect(mapLeft + 1, mapTop + 1, mapRight - mapLeft - 2, mapBottom - mapTop - 2);
 
   remotePlayers.forEach((remotePlayer) => {
+    if (remotePlayer.health <= 0) return;
     remotePlayer.renderX += (remotePlayer.x - remotePlayer.renderX) * (1 - Math.exp(-14 * frameDelta));
     remotePlayer.renderY += (remotePlayer.y - remotePlayer.renderY) * (1 - Math.exp(-14 * frameDelta));
     drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id, remotePlayer);
@@ -231,6 +235,7 @@ function connectToServer() {
       player.damage = message.player.damage;
       player.reload = message.player.reload;
       player.petalHealth = message.player.petalHealth;
+      updateDeathState();
       inventory.splice(0, inventory.length, ...message.inventory);
       hotbar.splice(0, hotbar.length, ...message.hotbar);
       secondaryHotbar.splice(0, secondaryHotbar.length, ...message.secondaryHotbar);
@@ -265,7 +270,7 @@ function connectToServer() {
       player.damage = message.player.damage;
       player.reload = message.player.reload;
       player.petalHealth = message.player.petalHealth;
-      player.orbitRadius = message.player.orbitRadius;
+      updateDeathState();
     }
     if (message.type === 'playerLeft') {
       remotePlayers.delete(message.playerId);
@@ -299,6 +304,18 @@ function sendServerAction(action, data = {}) {
   return true;
 }
 
+function updateDeathState() {
+  const isDead = player.health <= 0;
+  if (isDead === wasDead) return;
+  wasDead = isDead;
+  deathOverlay.hidden = !isDead;
+  if (isDead) {
+    expandHeld = false;
+    retractHeld = false;
+    sendPetalControl();
+  }
+}
+
 function sendPetalControl() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify({ type: 'petalControl', expandHeld, retractHeld }));
@@ -319,6 +336,7 @@ function appendChatMessage(username, text) {
 }
 
 function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'local', orbitState = {}) {
+  if (orbitState.health <= 0) return;
   const equippedPetals = equippedBar
     .map((petal, slot) => ({ petal, slot }))
     .filter(({ petal, slot }) => petal && (!orbitState.petalHealth || orbitState.petalHealth[slot] > 0));
@@ -386,16 +404,37 @@ function drawPlayer(screenX, screenY, username = '', playerState = player) {
   context.arc(11, -8, 8.4, 0, Math.PI * 2);
   context.fill();
   context.fillStyle = '#382a20';
-  context.beginPath();
-  context.arc(-10, -7, 3.6, 0, Math.PI * 2);
-  context.arc(10, -7, 3.6, 0, Math.PI * 2);
-  context.fill();
+  context.lineWidth = 3;
+  context.lineCap = 'round';
+  if (playerState.health <= 0) {
+    context.strokeStyle = '#382a20';
+    context.beginPath();
+    context.moveTo(-15, -12);
+    context.lineTo(-5, -2);
+    context.moveTo(-5, -12);
+    context.lineTo(-15, -2);
+    context.moveTo(5, -12);
+    context.lineTo(15, -2);
+    context.moveTo(15, -12);
+    context.lineTo(5, -2);
+    context.stroke();
+  } else {
+    context.beginPath();
+    context.arc(-10, -7, 3.6, 0, Math.PI * 2);
+    context.arc(10, -7, 3.6, 0, Math.PI * 2);
+    context.fill();
+  }
 
   context.strokeStyle = '#382a20';
   context.lineWidth = 3;
   context.lineCap = 'round';
   context.beginPath();
-  context.arc(0, 2, 12, 0.25, Math.PI - 0.25);
+  if (playerState.health <= 0) {
+    context.moveTo(-9, 10);
+    context.lineTo(9, 10);
+  } else {
+    context.arc(0, 2, 12, 0.25, Math.PI - 0.25);
+  }
   context.stroke();
   if (username) {
     context.shadowColor = 'transparent';
@@ -615,6 +654,13 @@ function swapHotbarSlot(slotIndex) {
 function movePlayer(deltaTime) {
   networkSendTimer += deltaTime;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  if (player.health <= 0) {
+    player.velocityX = 0;
+    player.velocityY = 0;
+    camera.x = player.x;
+    camera.y = player.y;
+    return;
+  }
   sendPlayerPosition();
 
   const horizontal = (keys.has('ArrowRight') || keys.has('d') ? 1 : 0)
@@ -635,7 +681,7 @@ function movePlayer(deltaTime) {
   player.x = Math.max(minPosition, Math.min(maxPosition, player.x));
   player.y = Math.max(minPosition, Math.min(maxPosition, player.y));
 
-  const correctionStrength = Math.min(1, deltaTime * 8);
+  const correctionStrength = 1 - Math.exp(-10 * deltaTime);
   player.x += (player.authoritativeX - player.x) * correctionStrength;
   player.y += (player.authoritativeY - player.y) * correctionStrength;
   camera.x = player.x;
@@ -728,6 +774,7 @@ window.addEventListener('blur', () => {
 
 inventoryButton.addEventListener('click', () => toggleInventory());
 inventoryClose.addEventListener('click', () => toggleInventory(false));
+respawnButton.addEventListener('click', () => sendServerAction('respawn'));
 playForm.addEventListener('submit', (event) => {
   event.preventDefault();
   selectedUsername = usernameInput.value.trim().replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 16) || 'Guest';

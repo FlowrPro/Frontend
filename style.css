@@ -164,6 +164,7 @@ body {
 
 #action-rail,
 #chat-panel,
+#death-overlay,
 #inventory-panel,
 #hotbar,
 #secondary-hotbar {
@@ -227,6 +228,53 @@ body {
 #chat-input:focus {
   border-color: #ffe27a;
   box-shadow: 0 0 0 2px rgba(255, 226, 122, 0.25);
+}
+
+#death-overlay {
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  background: rgba(18, 12, 9, 0.28);
+  backdrop-filter: blur(9px) saturate(0.72);
+}
+
+#death-overlay[hidden] {
+  display: none;
+}
+
+.death-card {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 26px 32px;
+  border: 1px solid rgba(255, 245, 205, 0.38);
+  border-radius: 12px;
+  background: rgba(45, 31, 21, 0.82);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.36), inset 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.death-card h2 {
+  margin: 0;
+  color: #fff4c9;
+  font-size: 26px;
+}
+
+#respawn-button {
+  padding: 10px 24px;
+  border: 1px solid rgba(255, 245, 205, 0.4);
+  border-radius: 7px;
+  color: #3a2b17;
+  background: #f2c94c;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+#respawn-button:hover,
+#respawn-button:focus-visible {
+  background: #ffe076;
+  outline: 3px solid rgba(255, 255, 255, 0.4);
 }
 
 .action-button,
