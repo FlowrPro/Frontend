@@ -41,6 +41,7 @@ const player = {
   velocityX: 0,
   velocityY: 0,
   orbitRadius: 86,
+  reloadAnimations: new Map(),
 };
 
 const SERVER_URL = 'wss://backend-v4ok.onrender.com';
@@ -186,7 +187,7 @@ function drawWorld() {
   remotePlayers.forEach((remotePlayer) => {
     remotePlayer.renderX += (remotePlayer.x - remotePlayer.renderX) * (1 - Math.exp(-14 * frameDelta));
     remotePlayer.renderY += (remotePlayer.y - remotePlayer.renderY) * (1 - Math.exp(-14 * frameDelta));
-    drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id, remotePlayer);
+    drawOrbitingPetals(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.hotbar, remotePlayer.id, remotePlayer, 'hotbar');
     drawPlayer(worldLeft + remotePlayer.renderX, worldTop + remotePlayer.renderY, remotePlayer.username, remotePlayer);
     if (remotePlayer.respawnFade) {
       const fadeProgress = (performance.now() - remotePlayer.respawnFade.startedAt) / 460;
@@ -207,7 +208,7 @@ function drawWorld() {
   player.renderY = player.y;
   player.expandHeld = expandHeld;
   player.retractHeld = retractHeld;
-  drawOrbitingPetals(worldLeft + player.x, worldTop + player.y, hotbar, localPlayerId, player);
+  drawOrbitingPetals(worldLeft + player.x, worldTop + player.y, hotbar, localPlayerId, player, 'hotbar');
   drawPlayer(worldLeft + player.x, worldTop + player.y, selectedUsername, player);
 }
 
@@ -314,6 +315,7 @@ function applyNetworkPlayerUpdate(networkPlayer) {
     player.bodyDamage = networkPlayer.bodyDamage;
     player.damage = networkPlayer.damage;
     player.reload = networkPlayer.reload;
+    markReloadedPetals(player, networkPlayer.petalReloads, networkPlayer.secondaryPetalReloads);
     player.petalHealth = networkPlayer.petalHealth;
     player.petalReloads = networkPlayer.petalReloads;
     player.secondaryPetalHealth = networkPlayer.secondaryPetalHealth;
@@ -327,6 +329,7 @@ function applyNetworkPlayerUpdate(networkPlayer) {
   const wasDead = existing.health <= 0;
   const previousRenderX = existing.renderX ?? existing.x;
   const previousRenderY = existing.renderY ?? existing.y;
+  markReloadedPetals(existing, networkPlayer.petalReloads, networkPlayer.secondaryPetalReloads);
   Object.assign(existing, networkPlayer);
   if (wasDead && existing.health > 0) {
     existing.respawnFade = {
@@ -336,6 +339,22 @@ function applyNetworkPlayerUpdate(networkPlayer) {
     };
   }
   remotePlayers.set(networkPlayer.id, existing);
+}
+
+function markReloadedPetals(state, nextMainReloads = [], nextSecondaryReloads = []) {
+  if (!state.reloadAnimations) state.reloadAnimations = new Map();
+  const previousMain = state.petalReloads || [];
+  const previousSecondary = state.secondaryPetalReloads || [];
+  [
+    ['hotbar', previousMain, nextMainReloads],
+    ['secondary-hotbar', previousSecondary, nextSecondaryReloads],
+  ].forEach(([barName, previous, next]) => {
+    next.forEach((remaining, slot) => {
+      if ((previous[slot] || 0) > 0 && remaining === 0) {
+        state.reloadAnimations.set(`${barName}:${slot}`, performance.now());
+      }
+    });
+  });
 }
 
 function sendServerAction(action, data = {}) {
@@ -376,6 +395,7 @@ function appendChatMessage(username, text) {
 }
 
 function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'local', orbitState = {}) {
+  orbitState.currentBarName = orbitState.currentBarName || 'hotbar';
   if (orbitState.health <= 0) return;
   const equippedPetals = equippedBar
     .map((petal, slot) => ({ petal, slot }))
@@ -392,20 +412,29 @@ function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'l
   const rotation = ((performance.now() % PETAL_ROTATION_MS) / PETAL_ROTATION_MS * Math.PI * 2) + phase;
   equippedPetals.forEach((petal, index) => {
     const angle = rotation + index / equippedPetals.length * Math.PI * 2;
+    const animationKey = `${orbitState.currentBarName || 'hotbar'}:${petal.slot}`;
+    const animationStartedAt = orbitState.reloadAnimations?.get(animationKey);
+    const animationProgress = animationStartedAt ? Math.min(1, (performance.now() - animationStartedAt) / 520) : 1;
+    if (animationProgress >= 1 && animationStartedAt) orbitState.reloadAnimations.delete(animationKey);
+    const easedProgress = 1 - Math.pow(1 - animationProgress, 3);
     drawPetal(
       screenX + Math.cos(angle) * orbitState.orbitRadius,
       screenY + Math.sin(angle) * orbitState.orbitRadius,
       getPetalStats(petal.petal),
       angle + Math.PI / 2,
       21,
+      0.12 + easedProgress * 0.88,
+      0.2 + easedProgress * 0.8,
     );
   });
 }
 
-function drawPetal(screenX, screenY, rarity, rotation, size) {
+function drawPetal(screenX, screenY, rarity, rotation, size, opacity = 1, scale = 1) {
   context.save();
   context.translate(screenX, screenY);
   context.rotate(rotation);
+  context.scale(scale, scale);
+  context.globalAlpha = opacity;
   context.shadowColor = 'rgba(30, 19, 12, 0.4)';
   context.shadowBlur = 7;
   context.shadowOffsetY = 3;
@@ -711,8 +740,8 @@ function handlePetalDrop(targetKind, targetIndex) {
   }
 
   const targetBar = getBar(targetKind);
-  if (targetBar[targetIndex]) return;
   if (draggedPetal.kind === 'inventory') {
+    if (targetBar[targetIndex]) return;
     sendServerAction('equip', {
       inventoryIndex: draggedPetal.index,
       targetBar: targetKind,
