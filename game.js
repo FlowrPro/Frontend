@@ -20,12 +20,11 @@ const usernameInput = document.querySelector('#username-input');
 
 // World dimensions and spawn coordinates are intentionally easy to edit.
 const WORLD = {
-  width: 6400,
-  height: 6400,
-  spawnX: 320,
-  spawnY: 6000,
+  width: 64000,
+  height: 32000,
+  spawnX: 3200,
+  spawnY: 30000,
 };
-const MAP_RENDER_SIZE = 3200;
 const MINIMAP_SIZE = 400;
 
 const player = {
@@ -38,7 +37,7 @@ const player = {
   renderX: WORLD.spawnX,
   renderY: WORLD.spawnY,
   radius: 31,
-  speed: 310,
+  speed: 1550,
   velocityX: 0,
   velocityY: 0,
   orbitRadius: 86,
@@ -53,8 +52,8 @@ const mobs = new Map();
 let networkSendTimer = 0;
 let selectedUsername = '';
 let hasStartedGame = false;
-const MOVEMENT_ACCELERATION = 1700;
-const MOVEMENT_DECELERATION = 2100;
+const MOVEMENT_ACCELERATION = 8500;
+const MOVEMENT_DECELERATION = 10500;
 
 const camera = { x: player.x, y: player.y };
 const keys = new Set();
@@ -64,9 +63,9 @@ const rockImage = new Image();
 const mapReference = new Image();
 let grassPattern = null;
 let borderPattern = null;
-let mapLayer = null;
-let minimapLayer = null;
 let walkabilityMask = null;
+let walkablePath = null;
+let minimapWalkablePath = null;
 const grassTextureScale = 0.5;
 const borderTextureScale = 1;
 const PETAL_ROTATION_MS = 4200;
@@ -148,18 +147,26 @@ rockImage.src = 'assets/Rock.svg';
 mapReference.addEventListener('load', buildMapLayer);
 mapReference.src = 'assets/SampleMap.jpg';
 
-function createTextureLayer(pattern, scale, mask) {
-  if (!pattern || !mapReference.naturalWidth) return null;
-  const layer = document.createElement('canvas');
-  layer.width = MAP_RENDER_SIZE;
-  layer.height = MAP_RENDER_SIZE;
-  const layerContext = layer.getContext('2d');
-  pattern.setTransform(new DOMMatrix().scale(scale));
-  layerContext.fillStyle = pattern;
-  layerContext.fillRect(0, 0, MAP_RENDER_SIZE, MAP_RENDER_SIZE);
-  layerContext.globalCompositeOperation = 'destination-in';
-  layerContext.drawImage(mask, 0, 0, MAP_RENDER_SIZE, MAP_RENDER_SIZE);
-  return layer;
+function createWalkablePath(targetWidth, targetHeight) {
+  const path = new Path2D();
+  for (let y = 0; y < walkabilityMask.height; y += 1) {
+    let runStart = null;
+    for (let x = 0; x <= walkabilityMask.width; x += 1) {
+      const isWalkable = x < walkabilityMask.width
+        && walkabilityMask.data[(y * walkabilityMask.width + x) * 4 + 3] > 0;
+      if (isWalkable && runStart === null) runStart = x;
+      if (!isWalkable && runStart !== null) {
+        path.rect(
+          runStart / walkabilityMask.width * targetWidth,
+          y / walkabilityMask.height * targetHeight,
+          (x - runStart) / walkabilityMask.width * targetWidth,
+          targetHeight / walkabilityMask.height,
+        );
+        runStart = null;
+      }
+    }
+  }
+  return path;
 }
 
 function buildMapLayer() {
@@ -193,30 +200,8 @@ function buildMapLayer() {
     height: sourceCanvas.height,
     data: walkData.data,
   };
-  const borderLayer = createTextureLayer(borderPattern, borderTextureScale, darkMask);
-  const grassLayer = createTextureLayer(grassPattern, grassTextureScale, walkMask);
-  mapLayer = document.createElement('canvas');
-  mapLayer.width = MAP_RENDER_SIZE;
-  mapLayer.height = MAP_RENDER_SIZE;
-  const mapContext = mapLayer.getContext('2d');
-  mapContext.drawImage(borderLayer, 0, 0);
-  mapContext.drawImage(grassLayer, 0, 0);
-
-  minimapLayer = document.createElement('canvas');
-  minimapLayer.width = MINIMAP_SIZE;
-  minimapLayer.height = MINIMAP_SIZE;
-  const minimapLayerContext = minimapLayer.getContext('2d');
-  minimapLayerContext.fillStyle = '#777b7f';
-  minimapLayerContext.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
-  const tunnelLayer = document.createElement('canvas');
-  tunnelLayer.width = MINIMAP_SIZE;
-  tunnelLayer.height = MINIMAP_SIZE;
-  const tunnelLayerContext = tunnelLayer.getContext('2d');
-  tunnelLayerContext.fillStyle = '#ffffff';
-  tunnelLayerContext.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
-  tunnelLayerContext.globalCompositeOperation = 'destination-in';
-  tunnelLayerContext.drawImage(walkMask, 0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
-  minimapLayerContext.drawImage(tunnelLayer, 0, 0);
+  walkablePath = createWalkablePath(WORLD.width, WORLD.height);
+  minimapWalkablePath = createWalkablePath(MINIMAP_SIZE, MINIMAP_SIZE);
 }
 
 function isWalkablePoint(x, y) {
@@ -254,10 +239,16 @@ function drawWorld() {
 
   const worldLeft = Math.floor(viewportWidth / 2 - camera.x);
   const worldTop = Math.floor(viewportHeight / 2 - camera.y);
-  if (mapLayer) {
+  if (walkablePath && borderPattern && grassPattern) {
     context.save();
-    context.imageSmoothingEnabled = false;
-    context.drawImage(mapLayer, worldLeft, worldTop, WORLD.width, WORLD.height);
+    context.translate(worldLeft, worldTop);
+    borderPattern.setTransform(new DOMMatrix().scale(borderTextureScale));
+    context.fillStyle = borderPattern;
+    context.fillRect(0, 0, WORLD.width, WORLD.height);
+    context.clip(walkablePath);
+    grassPattern.setTransform(new DOMMatrix().scale(grassTextureScale));
+    context.fillStyle = grassPattern;
+    context.fillRect(0, 0, WORLD.width, WORLD.height);
     context.restore();
   }
 
@@ -671,10 +662,11 @@ function drawMinimap() {
   minimapContext.clearRect(0, 0, size, size);
   minimapContext.fillStyle = '#777b7f';
   minimapContext.fillRect(0, 0, size, size);
-  if (minimapLayer) {
+  if (minimapWalkablePath) {
     minimapContext.save();
-    minimapContext.imageSmoothingEnabled = false;
-    minimapContext.drawImage(minimapLayer, 0, 0, size, size);
+    minimapContext.clip(minimapWalkablePath);
+    minimapContext.fillStyle = '#ffffff';
+    minimapContext.fillRect(0, 0, size, size);
     minimapContext.restore();
   }
 
