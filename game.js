@@ -22,9 +22,8 @@ const usernameInput = document.querySelector('#username-input');
 const WORLD = {
   width: 3200,
   height: 3200,
-  spawnX: 1600,
+  spawnX: 1500,
   spawnY: 1600,
-  border: 260,
 };
 
 const player = {
@@ -60,8 +59,11 @@ const keys = new Set();
 const grassTexture = new Image();
 const borderTexture = new Image();
 const rockImage = new Image();
+const mapReference = new Image();
 let grassPattern = null;
 let borderPattern = null;
+let mapLayer = null;
+let walkabilityMask = null;
 const grassTextureScale = 0.5;
 const borderTextureScale = 1;
 const PETAL_ROTATION_MS = 4200;
@@ -132,12 +134,89 @@ PETAL_RARITIES.forEach((rarity, index) => {
 grassTexture.src = 'assets/grasstexture.webp';
 grassTexture.addEventListener('load', () => {
   grassPattern = context.createPattern(grassTexture, 'repeat');
+  buildMapLayer();
 });
 borderTexture.addEventListener('load', () => {
   borderPattern = context.createPattern(borderTexture, 'repeat');
+  buildMapLayer();
 });
 borderTexture.src = 'assets/bordertexture.svg';
 rockImage.src = 'assets/Rock.svg';
+mapReference.addEventListener('load', buildMapLayer);
+mapReference.src = 'assets/SampleMap.jpg';
+
+function createTextureLayer(pattern, scale, mask) {
+  if (!pattern || !mapReference.naturalWidth) return null;
+  const layer = document.createElement('canvas');
+  layer.width = WORLD.width;
+  layer.height = WORLD.height;
+  const layerContext = layer.getContext('2d');
+  pattern.setTransform(new DOMMatrix().scale(scale));
+  layerContext.fillStyle = pattern;
+  layerContext.fillRect(0, 0, WORLD.width, WORLD.height);
+  layerContext.globalCompositeOperation = 'destination-in';
+  layerContext.drawImage(mask, 0, 0, WORLD.width, WORLD.height);
+  return layer;
+}
+
+function buildMapLayer() {
+  if (!mapReference.complete || !mapReference.naturalWidth || !grassPattern || !borderPattern) return;
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = mapReference.naturalWidth;
+  sourceCanvas.height = mapReference.naturalHeight;
+  const sourceContext = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  sourceContext.drawImage(mapReference, 0, 0);
+  const sourceData = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+  const walkMask = document.createElement('canvas');
+  const darkMask = document.createElement('canvas');
+  walkMask.width = sourceCanvas.width;
+  walkMask.height = sourceCanvas.height;
+  darkMask.width = sourceCanvas.width;
+  darkMask.height = sourceCanvas.height;
+  const walkContext = walkMask.getContext('2d');
+  const darkContext = darkMask.getContext('2d');
+  const walkData = walkContext.createImageData(sourceCanvas.width, sourceCanvas.height);
+  const darkData = darkContext.createImageData(sourceCanvas.width, sourceCanvas.height);
+  for (let index = 0; index < sourceData.data.length; index += 4) {
+    const brightness = (sourceData.data[index] + sourceData.data[index + 1] + sourceData.data[index + 2]) / 3;
+    const isWalkable = brightness > 180;
+    walkData.data[index + 3] = isWalkable ? 255 : 0;
+    darkData.data[index + 3] = isWalkable ? 0 : 255;
+  }
+  walkContext.putImageData(walkData, 0, 0);
+  darkContext.putImageData(darkData, 0, 0);
+  walkabilityMask = {
+    width: sourceCanvas.width,
+    height: sourceCanvas.height,
+    data: walkData.data,
+  };
+  const borderLayer = createTextureLayer(borderPattern, borderTextureScale, darkMask);
+  const grassLayer = createTextureLayer(grassPattern, grassTextureScale, walkMask);
+  mapLayer = document.createElement('canvas');
+  mapLayer.width = WORLD.width;
+  mapLayer.height = WORLD.height;
+  const mapContext = mapLayer.getContext('2d');
+  mapContext.drawImage(borderLayer, 0, 0);
+  mapContext.drawImage(grassLayer, 0, 0);
+}
+
+function isWalkablePoint(x, y) {
+  if (!walkabilityMask) return true;
+  if (x < 0 || y < 0 || x > WORLD.width || y > WORLD.height) return false;
+  const maskX = Math.min(walkabilityMask.width - 1, Math.floor(x / WORLD.width * walkabilityMask.width));
+  const maskY = Math.min(walkabilityMask.height - 1, Math.floor(y / WORLD.height * walkabilityMask.height));
+  return walkabilityMask.data[(maskY * walkabilityMask.width + maskX) * 4 + 3] > 0;
+}
+
+function isWalkablePosition(x, y, radius) {
+  const sampleCount = 12;
+  if (!isWalkablePoint(x, y)) return false;
+  for (let index = 0; index < sampleCount; index += 1) {
+    const angle = index / sampleCount * Math.PI * 2;
+    if (!isWalkablePoint(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius)) return false;
+  }
+  return true;
+}
 
 function resize() {
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -156,38 +235,7 @@ function drawWorld() {
 
   const worldLeft = Math.floor(viewportWidth / 2 - camera.x);
   const worldTop = Math.floor(viewportHeight / 2 - camera.y);
-  const mapLeft = worldLeft + WORLD.border;
-  const mapTop = worldTop + WORLD.border;
-  const mapRight = worldLeft + WORLD.width - WORLD.border;
-  const mapBottom = worldTop + WORLD.height - WORLD.border;
-
-  if (borderPattern) {
-    context.save();
-    borderPattern.setTransform(
-      new DOMMatrix().translate(worldLeft, worldTop).scale(borderTextureScale),
-    );
-    context.fillStyle = borderPattern;
-    context.fillRect(worldLeft, worldTop, WORLD.width, WORLD.height);
-    context.restore();
-  }
-
-  const mapWidth = mapRight - mapLeft;
-  const mapHeight = mapBottom - mapTop;
-  if (grassPattern) {
-    context.save();
-    grassPattern.setTransform(
-      new DOMMatrix().translate(mapLeft, mapTop).scale(grassTextureScale),
-    );
-    context.fillStyle = grassPattern;
-    context.fillRect(mapLeft, mapTop, mapWidth, mapHeight);
-    context.restore();
-  } else {
-    context.fillStyle = '#76a943';
-    context.fillRect(mapLeft, mapTop, mapWidth, mapHeight);
-  }
-  context.strokeStyle = 'rgba(42, 68, 27, 0.58)';
-  context.lineWidth = 4;
-  context.strokeRect(mapLeft + 1, mapTop + 1, mapRight - mapLeft - 2, mapBottom - mapTop - 2);
+  if (mapLayer) context.drawImage(mapLayer, worldLeft, worldTop);
 
   drawMobs(worldLeft, worldTop);
 
@@ -595,19 +643,10 @@ function drawPlayer(screenX, screenY, username = '', playerState = player, opaci
 
 function drawMinimap() {
   const size = minimapCanvas.width;
-  const scale = size / WORLD.width;
   minimapContext.clearRect(0, 0, size, size);
   minimapContext.fillStyle = '#694027';
   minimapContext.fillRect(0, 0, size, size);
-
-  const mapStart = WORLD.border * scale;
-  const mapSize = (WORLD.width - WORLD.border * 2) * scale;
-  minimapContext.fillStyle = '#cbd0c6';
-  minimapContext.fillRect(mapStart, mapStart, mapSize, mapSize);
-
-  minimapContext.strokeStyle = 'rgba(79, 48, 28, 0.75)';
-  minimapContext.lineWidth = 3;
-  minimapContext.strokeRect(mapStart, mapStart, mapSize, mapSize);
+  if (mapLayer) minimapContext.drawImage(mapLayer, 0, 0, size, size);
 
   minimapContext.fillStyle = '#4bba62';
   minimapContext.beginPath();
@@ -930,13 +969,12 @@ function movePlayer(deltaTime) {
   const velocityStep = (horizontal || vertical ? MOVEMENT_ACCELERATION : MOVEMENT_DECELERATION) * deltaTime;
   player.velocityX += Math.max(-velocityStep, Math.min(velocityStep, targetVelocityX - player.velocityX));
   player.velocityY += Math.max(-velocityStep, Math.min(velocityStep, targetVelocityY - player.velocityY));
-  player.x += player.velocityX * deltaTime;
-  player.y += player.velocityY * deltaTime;
-
-  const minPosition = WORLD.border + player.radius;
-  const maxPosition = WORLD.width - WORLD.border - player.radius;
-  player.x = Math.max(minPosition, Math.min(maxPosition, player.x));
-  player.y = Math.max(minPosition, Math.min(maxPosition, player.y));
+  const nextX = player.x + player.velocityX * deltaTime;
+  const nextY = player.y + player.velocityY * deltaTime;
+  if (isWalkablePosition(nextX, player.y, player.radius)) player.x = nextX;
+  else player.velocityX = 0;
+  if (isWalkablePosition(player.x, nextY, player.radius)) player.y = nextY;
+  else player.velocityY = 0;
 
   const correctionStrength = 1 - Math.exp(-10 * deltaTime);
   const errorX = player.authoritativeX - player.x;
