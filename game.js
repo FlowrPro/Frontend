@@ -74,14 +74,25 @@ const borderTextureScale = 1;
 const PETAL_ROTATION_MS = 4200;
 const HOTBAR_SIZE = 10;
 let PETAL_RARITIES = [
-  { id: 'common', label: 'Common', color: '#9ea4ad', multiplier: 1 },
-  { id: 'unusual', label: 'Unusual', color: '#55c878', multiplier: 3 },
-  { id: 'rare', label: 'Rare', color: '#55a9e8', multiplier: 9 },
-  { id: 'epic', label: 'Epic', color: '#bd67e8', multiplier: 27 },
-  { id: 'legendary', label: 'Legendary', color: '#f2a43c', multiplier: 81 },
-  { id: 'mythical', label: 'Mythical', color: '#ed5b75', multiplier: 243 },
-  { id: 'ultra', label: 'Ultra', color: '#f5df66', multiplier: 729 },
+  { id: 'common', label: 'Common', color: '#cfcfcf', multiplier: 1 },
+  { id: 'unusual', label: 'Unusual', color: '#7bd88f', multiplier: 3 },
+  { id: 'rare', label: 'Rare', color: '#6aa9ff', multiplier: 9 },
+  { id: 'epic', label: 'Epic', color: '#c77dff', multiplier: 27 },
+  { id: 'legendary', label: 'Legendary', color: '#ffad5c', multiplier: 81 },
+  { id: 'mythical', label: 'Mythical', color: '#ff6b8a', multiplier: 243 },
+  { id: 'ultra', label: 'Ultra', color: '#ffe66d', multiplier: 729 },
 ];
+const PETAL_ASSETS = {
+  orbit: 'Basic.svg',
+  common: 'CBasic.svg',
+  unusual: 'UnBasic.svg',
+  rare: 'RBasic.svg',
+  epic: 'EBasic.svg',
+  legendary: 'Lbasic.svg',
+  mythical: 'MBasic.svg',
+  ultra: 'UBasic.svg',
+};
+const petalImageCache = new Map();
 let PETAL_TYPES = {
   1: { id: 1, label: 'Basic', baseDamage: 10, baseHealth: 10, baseReload: 1.2 },
 };
@@ -132,11 +143,8 @@ function getBar(kind) {
   return kind === 'secondary-hotbar' ? secondaryHotbar : hotbar;
 }
 
-PETAL_RARITIES.forEach((rarity, index) => {
-  const rarityId = rarity.id;
-  hotbar[index] = createPetal(1, rarityId);
-  addToInventory(createPetal(1, rarityId), 5);
-});
+hotbar[0] = createPetal(1, 'common');
+addToInventory(createPetal(1, 'common'), 5);
 
 grassTexture.addEventListener('load', () => {
   grassPattern = context.createPattern(grassTexture, 'repeat');
@@ -545,10 +553,10 @@ function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'l
     const animationProgress = animationStartedAt ? Math.min(1, (performance.now() - animationStartedAt) / 520) : 1;
     if (animationProgress >= 1 && animationStartedAt) orbitState.reloadAnimations.delete(animationKey);
     const easedProgress = 1 - Math.pow(1 - animationProgress, 3);
-    drawPetal(
+    drawPetalAsset(
       screenX + Math.cos(angle) * orbitState.orbitRadius,
       screenY + Math.sin(angle) * orbitState.orbitRadius,
-      getPetalStats(petal.petal),
+      petal.petal,
       angle + Math.PI / 2,
       21,
       0.12 + easedProgress * 0.88,
@@ -557,7 +565,50 @@ function drawOrbitingPetals(screenX, screenY, equippedBar = hotbar, orbitId = 'l
   });
 }
 
-function drawPetal(screenX, screenY, rarity, rotation, size, opacity = 1, scale = 1) {
+function getPetalAssetPath(petal, mode = 'inventory') {
+  if (!petal || petal.petalId !== 1) return null;
+  return `assets/${mode === 'orbit' ? PETAL_ASSETS.orbit : PETAL_ASSETS[petal.rarityId]}`;
+}
+
+function getPetalImage(petal, mode = 'inventory') {
+  const path = getPetalAssetPath(petal, mode);
+  if (!path) return null;
+  if (petalImageCache.has(path)) return petalImageCache.get(path);
+  const image = new Image();
+  image.src = path;
+  image.addEventListener('error', () => {
+    if (mode === 'orbit' || image.dataset.webPAttempted) return;
+    image.dataset.webPAttempted = 'true';
+    fetch(path)
+      .then((response) => response.arrayBuffer())
+      .then((buffer) => {
+        image.src = URL.createObjectURL(new Blob([buffer], { type: 'image/webp' }));
+      })
+      .catch(() => {});
+  }, { once: true });
+  petalImageCache.set(path, image);
+  return image;
+}
+
+function setPetalImageSource(image, petal) {
+  const path = getPetalAssetPath(petal);
+  if (!path) return;
+  image.src = path;
+  image.addEventListener('error', () => {
+    if (image.dataset.webPAttempted) return;
+    image.dataset.webPAttempted = 'true';
+    fetch(path)
+      .then((response) => response.arrayBuffer())
+      .then((buffer) => {
+        image.src = URL.createObjectURL(new Blob([buffer], { type: 'image/webp' }));
+      })
+      .catch(() => {});
+  }, { once: true });
+}
+
+function drawPetalAsset(screenX, screenY, petal, rotation, size, opacity = 1, scale = 1) {
+  const image = getPetalImage(petal, 'orbit');
+  if (!image?.complete || !image.naturalWidth) return;
   context.save();
   context.translate(screenX, screenY);
   context.rotate(rotation);
@@ -566,13 +617,7 @@ function drawPetal(screenX, screenY, rarity, rotation, size, opacity = 1, scale 
   context.shadowColor = 'rgba(30, 19, 12, 0.4)';
   context.shadowBlur = 7;
   context.shadowOffsetY = 3;
-  context.fillStyle = '#fff';
-  context.strokeStyle = 'rgba(60, 36, 21, 0.7)';
-  context.lineWidth = 2;
-  context.beginPath();
-  context.arc(0, 0, size * 0.72, 0, Math.PI * 2);
-  context.fill();
-  context.stroke();
+  context.drawImage(image, -size / 2, -size / 2, size, size);
   context.restore();
 }
 
@@ -781,23 +826,11 @@ window.addEventListener('blur', () => hidePetalTooltip());
 
 function createPetalDragPreview(petal) {
   const stats = getPetalStats(petal);
-  const preview = document.createElement('canvas');
-  const previewContext = preview.getContext('2d');
+  const preview = document.createElement('img');
+  setPetalImageSource(preview, petal);
+  preview.alt = `${stats.rarityLabel} ${stats.petalName}`;
   preview.width = 88;
   preview.height = 88;
-  previewContext.fillStyle = stats.color;
-  previewContext.fillRect(2, 2, 84, 84);
-  previewContext.strokeStyle = 'rgba(255, 255, 255, 0.82)';
-  previewContext.lineWidth = 2;
-  previewContext.strokeRect(2, 2, 84, 84);
-  previewContext.fillStyle = stats.color;
-  previewContext.fillStyle = '#fff';
-  previewContext.strokeStyle = 'rgba(65, 65, 65, 0.45)';
-  previewContext.lineWidth = 2;
-  previewContext.beginPath();
-  previewContext.arc(44, 44, 22, 0, Math.PI * 2);
-  previewContext.fill();
-  previewContext.stroke();
   return preview;
 }
 
@@ -835,7 +868,12 @@ function createPetalSlot(kind, index, petal) {
 
   if (rarity) {
     slot.draggable = true;
-    slot.innerHTML = `<span class="petal-icon basic"></span><span class="petal-name">${stats.petalName}</span>`;
+    const icon = document.createElement('img');
+    icon.className = 'petal-icon';
+    setPetalImageSource(icon, petal);
+    icon.alt = `${stats.rarityLabel} ${stats.petalName}`;
+    slot.append(icon);
+    slot.insertAdjacentHTML('beforeend', `<span class="petal-name">${stats.petalName}</span>`);
     if (reloadRemaining > 0) {
       slot.innerHTML += `<span class="petal-reload-overlay" aria-hidden="true"></span><span class="petal-reload-time">${reloadRemaining.toFixed(1)}</span>`;
     }
