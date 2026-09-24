@@ -2,6 +2,7 @@ const canvas = document.querySelector('#game-canvas');
 const context = canvas.getContext('2d');
 const minimapCanvas = document.querySelector('#minimap-canvas');
 const minimapContext = minimapCanvas.getContext('2d');
+const minimapPanel = document.querySelector('#minimap-panel');
 const inventoryPanel = document.querySelector('#inventory-panel');
 const inventoryGrid = document.querySelector('#inventory-grid');
 const hotbarSlots = document.querySelector('#hotbar-slots');
@@ -99,6 +100,7 @@ let inventoryAnimationIndex = null;
 let equippedAnimationTarget = null;
 let activeTooltip = null;
 let pendingSwapAnimation = null;
+let minimapExpanded = false;
 
 function createPetal(petalId, rarityId) {
   return { petalId, rarityId };
@@ -682,6 +684,12 @@ function drawMinimap() {
   minimapContext.stroke();
 }
 
+function toggleMinimap() {
+  minimapExpanded = !minimapExpanded;
+  minimapPanel.classList.toggle('is-expanded', minimapExpanded);
+  minimapPanel.setAttribute('aria-expanded', String(minimapExpanded));
+}
+
 function showPetalTooltip(slot, petal) {
   hidePetalTooltip();
   const stats = getPetalStats(petal);
@@ -1051,6 +1059,11 @@ window.addEventListener('keydown', (event) => {
   if (event.key.toLowerCase() === 'x' && hasStartedGame) {
     event.preventDefault();
     toggleInventory();
+    return;
+  }
+  if (event.key.toLowerCase() === 'm' && hasStartedGame) {
+    event.preventDefault();
+    toggleMinimap();
     return;
   }
   if (event.key.toLowerCase() === 'r' && hasStartedGame) {

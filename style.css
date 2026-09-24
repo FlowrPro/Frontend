@@ -145,21 +145,35 @@ body {
   top: clamp(14px, 3vw, 32px);
   right: clamp(14px, 3vw, 32px);
   width: clamp(128px, 17vw, 214px);
-  aspect-ratio: 2 / 1;
+  aspect-ratio: 1;
   padding: 8px;
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   background: var(--panel);
   box-shadow: 0 7px 20px rgba(0, 0, 0, 0.26), inset 0 1px rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 180ms ease, aspect-ratio 180ms ease;
 }
 
 #minimap-canvas {
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
+  aspect-ratio: 2 / 1;
   border-radius: 5px;
   image-rendering: auto;
+}
+
+#minimap-panel.is-expanded {
+  width: min(70vw, 640px);
+  aspect-ratio: 2 / 1;
+}
+
+#minimap-panel.is-expanded #minimap-canvas {
+  height: 100%;
 }
 
 #action-rail,
@@ -725,5 +739,9 @@ body {
 @media (max-width: 500px) {
   #minimap-panel {
     padding: 6px;
+  }
+
+  #minimap-panel.is-expanded {
+    width: calc(100vw - 28px);
   }
 }
