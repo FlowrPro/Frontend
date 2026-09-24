@@ -145,7 +145,7 @@ body {
   top: clamp(14px, 3vw, 32px);
   right: clamp(14px, 3vw, 32px);
   width: clamp(128px, 17vw, 214px);
-  aspect-ratio: 1;
+  aspect-ratio: 2 / 1;
   padding: 8px;
   border: 1px solid var(--panel-border);
   border-radius: 10px;

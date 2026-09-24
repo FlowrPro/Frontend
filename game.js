@@ -25,7 +25,8 @@ const WORLD = {
   spawnX: 3200,
   spawnY: 30000,
 };
-const MINIMAP_SIZE = 400;
+const MINIMAP_WIDTH = 400;
+const MINIMAP_HEIGHT = 200;
 
 const player = {
   x: WORLD.spawnX,
@@ -37,7 +38,7 @@ const player = {
   renderX: WORLD.spawnX,
   renderY: WORLD.spawnY,
   radius: 31,
-  speed: 1550,
+  speed: 310,
   velocityX: 0,
   velocityY: 0,
   orbitRadius: 86,
@@ -52,8 +53,8 @@ const mobs = new Map();
 let networkSendTimer = 0;
 let selectedUsername = '';
 let hasStartedGame = false;
-const MOVEMENT_ACCELERATION = 8500;
-const MOVEMENT_DECELERATION = 10500;
+const MOVEMENT_ACCELERATION = 1700;
+const MOVEMENT_DECELERATION = 2100;
 
 const camera = { x: player.x, y: player.y };
 const keys = new Set();
@@ -201,7 +202,7 @@ function buildMapLayer() {
     data: walkData.data,
   };
   walkablePath = createWalkablePath(WORLD.width, WORLD.height);
-  minimapWalkablePath = createWalkablePath(MINIMAP_SIZE, MINIMAP_SIZE);
+  minimapWalkablePath = createWalkablePath(MINIMAP_WIDTH, MINIMAP_HEIGHT);
 }
 
 function isWalkablePoint(x, y) {
@@ -229,8 +230,8 @@ function resize() {
   canvas.width = Math.floor(viewportWidth * pixelRatio);
   canvas.height = Math.floor(viewportHeight * pixelRatio);
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  minimapCanvas.width = 400;
-  minimapCanvas.height = 400;
+  minimapCanvas.width = MINIMAP_WIDTH;
+  minimapCanvas.height = MINIMAP_HEIGHT;
 }
 
 function drawWorld() {
@@ -657,22 +658,24 @@ function drawPlayer(screenX, screenY, username = '', playerState = player, opaci
 }
 
 function drawMinimap() {
-  const size = minimapCanvas.width;
-  const scale = size / WORLD.width;
-  minimapContext.clearRect(0, 0, size, size);
+  const width = minimapCanvas.width;
+  const height = minimapCanvas.height;
+  const scaleX = width / WORLD.width;
+  const scaleY = height / WORLD.height;
+  minimapContext.clearRect(0, 0, width, height);
   minimapContext.fillStyle = '#777b7f';
-  minimapContext.fillRect(0, 0, size, size);
+  minimapContext.fillRect(0, 0, width, height);
   if (minimapWalkablePath) {
     minimapContext.save();
     minimapContext.clip(minimapWalkablePath);
     minimapContext.fillStyle = '#ffffff';
-    minimapContext.fillRect(0, 0, size, size);
+    minimapContext.fillRect(0, 0, width, height);
     minimapContext.restore();
   }
 
   minimapContext.fillStyle = '#4bba62';
   minimapContext.beginPath();
-  minimapContext.arc(player.x * scale, player.y * scale, 6, 0, Math.PI * 2);
+  minimapContext.arc(player.x * scaleX, player.y * scaleY, 6, 0, Math.PI * 2);
   minimapContext.fill();
   minimapContext.strokeStyle = '#205c32';
   minimapContext.lineWidth = 2;
