@@ -167,6 +167,19 @@ body {
   image-rendering: auto;
 }
 
+#minimap-coordinate-readout {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  z-index: 2;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #2d3034;
+  font: 700 10px/1.2 Nunito, sans-serif;
+  pointer-events: none;
+}
+
 #minimap-panel.is-expanded {
   width: min(70vw, 640px);
   aspect-ratio: 1;

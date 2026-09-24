@@ -3,6 +3,7 @@ const context = canvas.getContext('2d');
 const minimapCanvas = document.querySelector('#minimap-canvas');
 const minimapContext = minimapCanvas.getContext('2d');
 const minimapPanel = document.querySelector('#minimap-panel');
+const minimapCoordinateReadout = document.querySelector('#minimap-coordinate-readout');
 const inventoryPanel = document.querySelector('#inventory-panel');
 const inventoryGrid = document.querySelector('#inventory-grid');
 const hotbarSlots = document.querySelector('#hotbar-slots');
@@ -101,6 +102,7 @@ let equippedAnimationTarget = null;
 let activeTooltip = null;
 let pendingSwapAnimation = null;
 let minimapExpanded = false;
+let minimapCursor = null;
 
 function createPetal(petalId, rarityId) {
   return { petalId, rarityId };
@@ -675,6 +677,45 @@ function drawMinimap() {
     minimapContext.restore();
   }
 
+  minimapContext.save();
+  minimapContext.strokeStyle = 'rgba(45, 48, 52, 0.42)';
+  minimapContext.fillStyle = 'rgba(45, 48, 52, 0.8)';
+  minimapContext.lineWidth = 1;
+  minimapContext.font = '700 10px Nunito, sans-serif';
+  minimapContext.textAlign = 'left';
+  minimapContext.textBaseline = 'top';
+  for (let x = 0; x <= 4; x += 1) {
+    const position = x / 4 * width;
+    minimapContext.beginPath();
+    minimapContext.moveTo(position, 0);
+    minimapContext.lineTo(position, height);
+    minimapContext.stroke();
+    minimapContext.fillText(String(x * 16000), Math.min(position + 3, width - 34), 3);
+  }
+  minimapContext.textAlign = 'right';
+  for (let y = 0; y <= 4; y += 1) {
+    const position = y / 4 * height;
+    minimapContext.beginPath();
+    minimapContext.moveTo(0, position);
+    minimapContext.lineTo(width, position);
+    minimapContext.stroke();
+    minimapContext.fillText(String(y * 8000), width - 3, Math.min(position + 3, height - 13));
+  }
+  minimapContext.restore();
+
+  if (minimapCursor) {
+    minimapContext.save();
+    minimapContext.strokeStyle = '#ed5b75';
+    minimapContext.lineWidth = 2;
+    minimapContext.beginPath();
+    minimapContext.moveTo(minimapCursor.x - 8, minimapCursor.y);
+    minimapContext.lineTo(minimapCursor.x + 8, minimapCursor.y);
+    minimapContext.moveTo(minimapCursor.x, minimapCursor.y - 8);
+    minimapContext.lineTo(minimapCursor.x, minimapCursor.y + 8);
+    minimapContext.stroke();
+    minimapContext.restore();
+  }
+
   minimapContext.fillStyle = '#4bba62';
   minimapContext.beginPath();
   minimapContext.arc(player.x * scaleX, player.y * scaleY, 6, 0, Math.PI * 2);
@@ -689,6 +730,22 @@ function toggleMinimap() {
   minimapPanel.classList.toggle('is-expanded', minimapExpanded);
   minimapPanel.setAttribute('aria-expanded', String(minimapExpanded));
 }
+
+function updateMinimapCursor(event) {
+  const bounds = minimapCanvas.getBoundingClientRect();
+  const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+  const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+  const worldX = Math.round(x * WORLD.width);
+  const worldY = Math.round(y * WORLD.height);
+  minimapCursor = { x: x * minimapCanvas.width, y: y * minimapCanvas.height };
+  minimapCoordinateReadout.textContent = `X: ${worldX}  Y: ${worldY}`;
+}
+
+minimapCanvas.addEventListener('pointermove', updateMinimapCursor);
+minimapCanvas.addEventListener('pointerleave', () => {
+  minimapCursor = null;
+  minimapCoordinateReadout.textContent = 'Hover for coordinates';
+});
 
 function showPetalTooltip(slot, petal) {
   hidePetalTooltip();
