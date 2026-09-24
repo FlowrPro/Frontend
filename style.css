@@ -161,19 +161,15 @@ body {
 #minimap-canvas {
   display: block;
   width: 100%;
-  height: auto;
-  aspect-ratio: 2 / 1;
+  height: 100%;
+  aspect-ratio: 1;
   border-radius: 5px;
   image-rendering: auto;
 }
 
 #minimap-panel.is-expanded {
   width: min(70vw, 640px);
-  aspect-ratio: 2 / 1;
-}
-
-#minimap-panel.is-expanded #minimap-canvas {
-  height: 100%;
+  aspect-ratio: 1;
 }
 
 #action-rail,

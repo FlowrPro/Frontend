@@ -27,7 +27,7 @@ const WORLD = {
   spawnY: 30000,
 };
 const MINIMAP_WIDTH = 400;
-const MINIMAP_HEIGHT = 200;
+const MINIMAP_HEIGHT = 400;
 
 const player = {
   x: WORLD.spawnX,
