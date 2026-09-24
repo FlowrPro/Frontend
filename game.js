@@ -131,11 +131,11 @@ PETAL_RARITIES.forEach((rarity, index) => {
   addToInventory(createPetal(1, rarityId), 5);
 });
 
-grassTexture.src = 'assets/grasstexture.webp';
 grassTexture.addEventListener('load', () => {
   grassPattern = context.createPattern(grassTexture, 'repeat');
   buildMapLayer();
 });
+grassTexture.src = 'assets/grasstexture.webp';
 borderTexture.addEventListener('load', () => {
   borderPattern = context.createPattern(borderTexture, 'repeat');
   buildMapLayer();
@@ -643,6 +643,7 @@ function drawPlayer(screenX, screenY, username = '', playerState = player, opaci
 
 function drawMinimap() {
   const size = minimapCanvas.width;
+  const scale = size / WORLD.width;
   minimapContext.clearRect(0, 0, size, size);
   minimapContext.fillStyle = '#694027';
   minimapContext.fillRect(0, 0, size, size);
