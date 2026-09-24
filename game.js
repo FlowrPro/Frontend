@@ -20,11 +20,13 @@ const usernameInput = document.querySelector('#username-input');
 
 // World dimensions and spawn coordinates are intentionally easy to edit.
 const WORLD = {
-  width: 3200,
-  height: 3200,
-  spawnX: 1500,
-  spawnY: 1600,
+  width: 6400,
+  height: 6400,
+  spawnX: 320,
+  spawnY: 6000,
 };
+const MAP_RENDER_SIZE = 3200;
+const MINIMAP_SIZE = 400;
 
 const player = {
   x: WORLD.spawnX,
@@ -63,6 +65,7 @@ const mapReference = new Image();
 let grassPattern = null;
 let borderPattern = null;
 let mapLayer = null;
+let minimapLayer = null;
 let walkabilityMask = null;
 const grassTextureScale = 0.5;
 const borderTextureScale = 1;
@@ -148,14 +151,14 @@ mapReference.src = 'assets/SampleMap.jpg';
 function createTextureLayer(pattern, scale, mask) {
   if (!pattern || !mapReference.naturalWidth) return null;
   const layer = document.createElement('canvas');
-  layer.width = WORLD.width;
-  layer.height = WORLD.height;
+  layer.width = MAP_RENDER_SIZE;
+  layer.height = MAP_RENDER_SIZE;
   const layerContext = layer.getContext('2d');
   pattern.setTransform(new DOMMatrix().scale(scale));
   layerContext.fillStyle = pattern;
-  layerContext.fillRect(0, 0, WORLD.width, WORLD.height);
+  layerContext.fillRect(0, 0, MAP_RENDER_SIZE, MAP_RENDER_SIZE);
   layerContext.globalCompositeOperation = 'destination-in';
-  layerContext.drawImage(mask, 0, 0, WORLD.width, WORLD.height);
+  layerContext.drawImage(mask, 0, 0, MAP_RENDER_SIZE, MAP_RENDER_SIZE);
   return layer;
 }
 
@@ -193,11 +196,27 @@ function buildMapLayer() {
   const borderLayer = createTextureLayer(borderPattern, borderTextureScale, darkMask);
   const grassLayer = createTextureLayer(grassPattern, grassTextureScale, walkMask);
   mapLayer = document.createElement('canvas');
-  mapLayer.width = WORLD.width;
-  mapLayer.height = WORLD.height;
+  mapLayer.width = MAP_RENDER_SIZE;
+  mapLayer.height = MAP_RENDER_SIZE;
   const mapContext = mapLayer.getContext('2d');
   mapContext.drawImage(borderLayer, 0, 0);
   mapContext.drawImage(grassLayer, 0, 0);
+
+  minimapLayer = document.createElement('canvas');
+  minimapLayer.width = MINIMAP_SIZE;
+  minimapLayer.height = MINIMAP_SIZE;
+  const minimapLayerContext = minimapLayer.getContext('2d');
+  minimapLayerContext.fillStyle = '#777b7f';
+  minimapLayerContext.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+  const tunnelLayer = document.createElement('canvas');
+  tunnelLayer.width = MINIMAP_SIZE;
+  tunnelLayer.height = MINIMAP_SIZE;
+  const tunnelLayerContext = tunnelLayer.getContext('2d');
+  tunnelLayerContext.fillStyle = '#ffffff';
+  tunnelLayerContext.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+  tunnelLayerContext.globalCompositeOperation = 'destination-in';
+  tunnelLayerContext.drawImage(walkMask, 0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+  minimapLayerContext.drawImage(tunnelLayer, 0, 0);
 }
 
 function isWalkablePoint(x, y) {
@@ -235,7 +254,12 @@ function drawWorld() {
 
   const worldLeft = Math.floor(viewportWidth / 2 - camera.x);
   const worldTop = Math.floor(viewportHeight / 2 - camera.y);
-  if (mapLayer) context.drawImage(mapLayer, worldLeft, worldTop);
+  if (mapLayer) {
+    context.save();
+    context.imageSmoothingEnabled = false;
+    context.drawImage(mapLayer, worldLeft, worldTop, WORLD.width, WORLD.height);
+    context.restore();
+  }
 
   drawMobs(worldLeft, worldTop);
 
@@ -645,9 +669,14 @@ function drawMinimap() {
   const size = minimapCanvas.width;
   const scale = size / WORLD.width;
   minimapContext.clearRect(0, 0, size, size);
-  minimapContext.fillStyle = '#694027';
+  minimapContext.fillStyle = '#777b7f';
   minimapContext.fillRect(0, 0, size, size);
-  if (mapLayer) minimapContext.drawImage(mapLayer, 0, 0, size, size);
+  if (minimapLayer) {
+    minimapContext.save();
+    minimapContext.imageSmoothingEnabled = false;
+    minimapContext.drawImage(minimapLayer, 0, 0, size, size);
+    minimapContext.restore();
+  }
 
   minimapContext.fillStyle = '#4bba62';
   minimapContext.beginPath();
