@@ -23,8 +23,8 @@ const usernameInput = document.querySelector('#username-input');
 const WORLD = {
   width: 64000,
   height: 32000,
-  spawnX: 3200,
-  spawnY: 30000,
+  spawnX: 29400,
+  spawnY: 5667,
 };
 const MINIMAP_WIDTH = 400;
 const MINIMAP_HEIGHT = 400;
